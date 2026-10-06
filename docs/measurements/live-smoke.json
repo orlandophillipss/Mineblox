@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "minecraftVersion": "1.21.4",
+  "node": "v24.16.0",
+  "date": "2026-10-06T21:37:28.575Z",
+  "spawnMs": 390.0456,
+  "inputToObserverMs": 123.2684999999999,
+  "pollResolutionMs": 50,
+  "voxelCount": 64,
+  "snapshotBytes": 288,
+  "cubePreviewQuads": 6,
+  "serverCorrectionReceived": true,
+  "observedPlayer": "RB900000000001",
+  "note": "Separate headless observer on a real Minecraft server; no GUI or Roblox FPS/TPS validation. Meshing treats every non-air state as an opaque cube."
+}

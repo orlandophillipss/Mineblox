@@ -1,0 +1,65 @@
+import { performance } from 'node:perf_hooks';
+import { cpus, platform, arch } from 'node:os';
+import { mkdir, writeFile } from 'node:fs/promises';
+import {
+  VoxelRegion,
+  encodeSnapshot,
+  decodeSnapshot,
+} from '../bridge/voxels.js';
+import { greedyMesh } from '../bridge/mesh.js';
+import { validateInput } from '../bridge/input.js';
+
+function measure(name, iterations, operation) {
+  for (let i = 0; i < 20; i++) operation();
+  const samples = [];
+  for (let run = 0; run < 7; run++) {
+    const start = performance.now();
+    for (let i = 0; i < iterations; i++) operation();
+    samples.push(((performance.now() - start) * 1000) / iterations);
+  }
+  samples.sort((a, b) => a - b);
+  return {
+    name,
+    iterationsPerSample: iterations,
+    samples: 7,
+    medianUs: samples[3],
+    minUs: samples[0],
+    maxUs: samples[6],
+  };
+}
+const chunk = new VoxelRegion({ size: [16, 16, 16] });
+chunk.data.fill(1);
+const plane = new VoxelRegion({ size: [64, 1, 64] });
+plane.data.fill(1);
+const wire = encodeSnapshot(chunk);
+const input = { version: 1, seq: 1, controls: 1, yaw: 0, pitch: 0 };
+const results = [
+  measure('snapshot encode 16^3', 1000, () => encodeSnapshot(chunk)),
+  measure('snapshot decode 16^3', 1000, () => decodeSnapshot(wire)),
+  measure('greedy mesh solid 16^3', 50, () => greedyMesh(chunk)),
+  measure('greedy mesh plane 64x1x64', 50, () => greedyMesh(plane)),
+  measure('input validation', 10000, () => validateInput(input)),
+  measure('single-voxel delta', 1000, () => {
+    const revision = chunk.revision;
+    chunk.applyDelta({
+      base: revision,
+      revision: revision + 1,
+      changes: [{ x: 1, y: 1, z: 1, state: 1 }],
+    });
+  }),
+];
+const output = {
+  date: new Date().toISOString(),
+  node: process.version,
+  platform: platform(),
+  arch: arch(),
+  cpu: cpus()[0].model,
+  results,
+  snapshotBytes: wire.length,
+  voxelStorageBytes: chunk.data.byteLength,
+  planeQuads: greedyMesh(plane).length,
+  note: 'Local microbenchmarks; no network RTT, server TPS, Roblox FPS, total heap per chunk, or session scaling claims.',
+};
+await mkdir('.local', { recursive: true });
+await writeFile('.local/benchmarks.json', JSON.stringify(output, null, 2));
+console.log(JSON.stringify(output, null, 2));
