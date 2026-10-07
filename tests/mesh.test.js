@@ -37,6 +37,15 @@ test('transparent interfaces and chunk borders use explicit occlusion rules', ()
   const material = (s) =>
     s === 0 ? null : { key: String(s), opaque: s === 1 };
   assert.equal(area(greedyMesh(a, material)), 10);
+  assert.equal(
+    area(
+      greedyMesh(a, (s) =>
+        s === 0 ? null : { key: String(s), opaque: false, cullSame: false },
+      ),
+    ),
+    12,
+    'cutout foliage keeps faces behind transparent texels',
+  );
   a.set(1, 0, 0, 3);
   assert.equal(area(greedyMesh(a, material)), 12);
   const b = new VoxelRegion({ size: [1, 1, 1], origin: [-16, 0, -16] });

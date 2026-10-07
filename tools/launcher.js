@@ -7,7 +7,7 @@ import path from 'node:path';
 import mineflayer from 'mineflayer';
 import { createGateway } from '../bridge/gateway.js';
 import { buildPlace } from './build-place.js';
-import { robloxExecutable } from './roblox-installation.js';
+import { openStudio } from './open-studio.js';
 
 const children = [];
 let gateway,
@@ -88,7 +88,18 @@ try {
     throw new Error(
       'Accept the Minecraft EULA in .local/minecraft/eula.txt before starting. https://www.minecraft.net/en-us/eula',
     );
-  const token = randomBytes(32).toString('hex');
+  let previous;
+  try {
+    previous = JSON.parse(await readFile('.local/launcher.json', 'utf8'));
+  } catch {
+    /* First launch. */
+  }
+  const reusable =
+    previous &&
+    /^[a-f0-9]{64}$/.test(previous.token) &&
+    /^http:\/\/127\.0\.0\.1:\d+$/.test(previous.url);
+  const token = reusable ? previous.token : randomBytes(32).toString('hex');
+  const preferredPort = reusable ? Number(new URL(previous.url).port) : 0;
   execFileSync(process.execPath, ['tools/minecraft.js', 'configure'], {
     stdio: 'inherit',
     windowsHide: true,
@@ -113,15 +124,25 @@ try {
       'Minecraft did not become ready; see .local/logs/minecraft.log',
     );
   const bridgeLog = log('bridge');
+  let models = {};
+  try {
+    models = JSON.parse(
+      await readFile('.local/roblox/model-catalog.json', 'utf8'),
+    );
+  } catch {
+    /* Basic geometry remains available. */
+  }
   gateway = createGateway({
     token,
+    models,
+    terrainRadius: 3,
     minecraft: { host: '127.0.0.1', port: 25565, version: '1.21.4' },
     createBot: mineflayer.createBot,
     log: (record) => bridgeLog.write(JSON.stringify(record) + '\n'),
   });
   await new Promise((resolve, reject) => {
     gateway.server.once('error', reject);
-    gateway.server.listen(0, '127.0.0.1', resolve);
+    gateway.server.listen(preferredPort, '127.0.0.1', resolve);
   });
   const url = `http://127.0.0.1:${gateway.server.address().port}`;
   const health = await fetch(`${url}/health`, {
@@ -135,12 +156,7 @@ try {
   const place = await buildPlace({ url, token });
   console.log('Opening the generated Roblox place…');
   if (!process.argv.includes('--no-studio')) {
-    const studio = spawn(
-      await robloxExecutable('RobloxStudioBeta.exe'),
-      [place],
-      { detached: true, stdio: 'ignore', windowsHide: false },
-    );
-    studio.unref();
+    await openStudio(place);
     const automation = spawn(process.execPath, ['tools/studio-auto.js'], {
       stdio: 'inherit',
       windowsHide: true,

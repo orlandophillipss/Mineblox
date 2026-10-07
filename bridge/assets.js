@@ -9,7 +9,7 @@ const digest = (bytes) => createHash('sha256').update(bytes).digest('hex');
 function assetPath(value) {
   if (
     typeof value !== 'string' ||
-    !/^assets\/minecraft\/(models|blockstates|textures)\/[a-z0-9_/-]+\.(json|png|mcmeta)$/.test(
+    !/^assets\/minecraft\/(models|blockstates|textures|font)\/[a-z0-9_/-]+\.(json|png|mcmeta)$/.test(
       value,
     ) ||
     value.includes('//')

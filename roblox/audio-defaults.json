@@ -1,0 +1,11 @@
+{
+  "sounds": {
+    "ui": "rbxassetid://8919449656",
+    "damage": "rbxassetid://535690488",
+    "step": "rbxassetid://8031019470",
+    "step_grass": "rbxassetid://137891923918460",
+    "block.wooden_button.click_on": "rbxassetid://8919449656",
+    "block.wooden_button.click_off": "rbxassetid://8919449656"
+  },
+  "music": []
+}

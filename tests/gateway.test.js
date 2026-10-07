@@ -139,3 +139,51 @@ test('duplicate identity cannot race during Minecraft login', async (t) => {
   assert.equal((await a).status, 504);
   assert.equal(gateway.sessions.size, 0);
 });
+
+test('server supplied usernames and display names survive exchange; name collisions are rejected', async (t) => {
+  const { request } = await setup(t);
+  const first = await request('/v1/sessions', 'POST', {
+    version: 1,
+    robloxId: '1',
+    username: 'RealUsername',
+    displayName: 'Display Name',
+  });
+  assert.equal(first.status, 201);
+  assert.equal(first.body.minecraftName, 'RealUsername');
+  assert.equal(
+    (
+      await request('/v1/sessions', 'POST', {
+        version: 1,
+        robloxId: '2',
+        username: 'realusername',
+      })
+    ).status,
+    409,
+  );
+  const exchange = await request('/v1/exchange', 'POST', {
+    version: 1,
+    inputs: [
+      {
+        id: first.body.id,
+        frame: { version: 1, seq: 1, controls: 0, yaw: 0, pitch: 0 },
+      },
+    ],
+  });
+  assert.deepEqual(exchange.body.states[0].roster, [
+    {
+      minecraftName: 'RealUsername',
+      username: 'RealUsername',
+      displayName: 'Display Name',
+    },
+  ]);
+  assert.equal(
+    (
+      await request('/v1/sessions', 'POST', {
+        version: 1,
+        robloxId: '2',
+        displayName: 'bad\nname',
+      })
+    ).status,
+    400,
+  );
+});

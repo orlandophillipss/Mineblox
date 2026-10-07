@@ -12,6 +12,8 @@ export function createGateway({
   maxSessions = 16,
   spawnTimeoutMs = 15000,
   log = () => {},
+  models = {},
+  terrainRadius = 2,
 }) {
   if (
     typeof token !== 'string' ||
@@ -24,7 +26,7 @@ export function createGateway({
   if (!['127.0.0.1', '::1', 'localhost'].includes(minecraft.host))
     throw new Error('Offline development Minecraft target must be loopback');
   const sessions = new Map();
-  const terrain = new TerrainService();
+  const terrain = new TerrainService({ models, radius: terrainRadius });
   let terrainBusy = false;
   const identities = new Set();
   let shuttingDown = false;
@@ -91,15 +93,37 @@ export function createGateway({
         return;
       }
       if (req.url === '/v1/sessions' && req.method === 'POST') {
-        minecraftName(body.robloxId);
-        if (Object.keys(body).some((k) => !['version', 'robloxId'].includes(k)))
+        const name = minecraftName(body.robloxId, body.username);
+        if (
+          body.displayName !== undefined &&
+          (typeof body.displayName !== 'string' ||
+            body.displayName.length > 64 ||
+            [...body.displayName].some(
+              (c) => c.charCodeAt(0) < 32 || c.charCodeAt(0) === 127,
+            ))
+        )
+          throw new BridgeError('Invalid display name');
+        if (
+          Object.keys(body).some(
+            (k) =>
+              !['version', 'robloxId', 'username', 'displayName'].includes(k),
+          )
+        )
           throw new BridgeError('Unknown session field');
         if (identities.has(body.robloxId))
           throw new BridgeError('Identity already connected', 409);
+        if (
+          [...sessions.values()].some(
+            (p) => p.name.toLowerCase() === name.toLowerCase(),
+          )
+        )
+          throw new BridgeError('Minecraft name already connected', 409);
         if (sessions.size >= maxSessions)
           throw new BridgeError('Session limit reached', 429);
         const player = new VirtualPlayer({
           robloxId: body.robloxId,
+          username: body.username,
+          displayName: body.displayName,
           createBot,
           minecraft,
           log,
@@ -125,13 +149,37 @@ export function createGateway({
           try {
             if (
               !input ||
-              Object.keys(input).some((k) => !['id', 'frame'].includes(k))
+              Object.keys(input).some(
+                (k) => !['id', 'frame', 'actions'].includes(k),
+              )
             )
               throw new BridgeError('Invalid exchange input');
             const player = sessions.get(input.id);
             if (!player) throw new BridgeError('Unknown session', 404);
             const ack = player.apply(input.frame);
-            return { ...player.snapshot(), ...ack };
+            if (input.actions !== undefined) {
+              if (!Array.isArray(input.actions) || input.actions.length > 4)
+                throw new BridgeError('Invalid actions');
+              for (const action of input.actions) {
+                try {
+                  player.actions.submit(action);
+                } catch (error) {
+                  player.event('actionRejected', {
+                    seq: action?.seq,
+                    error: error.message,
+                  });
+                }
+              }
+            }
+            return {
+              ...player.snapshot(),
+              ...ack,
+              roster: [...sessions.values()].map((p) => ({
+                minecraftName: p.name,
+                username: p.username,
+                displayName: p.displayName,
+              })),
+            };
           } catch (error) {
             return {
               id: input?.id,

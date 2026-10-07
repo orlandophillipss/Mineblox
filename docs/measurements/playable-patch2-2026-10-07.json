@@ -1,0 +1,31 @@
+{
+  "date": "2026-10-07T21:21:36.339Z",
+  "checks": {
+    "robloxToMinecraftChat": true,
+    "minecraftToRobloxChat": true,
+    "commandsRespectPermissions": true,
+    "inventorySplitAndMove": true,
+    "authoritativeBreaking": true,
+    "authoritativePlacement": true,
+    "invalidTargetRejected": true,
+    "entityAttackForwarded": true,
+    "entityAttackServerOutcome": true,
+    "entityReplication": true,
+    "droppedItemVisual": true,
+    "blockViewportIcon": true,
+    "keyboardMovement": true,
+    "inventoryUiOpened": true,
+    "chatUi": true,
+    "uiSoundLoaded": true
+  },
+  "note": "Actual Roblox client remotes/UI and Minecraft server outcomes, with a dedicated local test operator. Roblox identity is not promoted. GUI Minecraft presence is checked separately.",
+  "movement": {
+    "firstObservedMs": 100.3730999999998,
+    "settledErrorBlocks": 0.051423068844549724,
+    "localCameraResponseMs": 41.03440000108094,
+    "cameraMovedBeforeNextState": true,
+    "cameraMovedBeforeInputAcknowledged": true,
+    "distanceBlocks": 1.8629343224909773
+  },
+  "guiMinecraftConnected": false
+}

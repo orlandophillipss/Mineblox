@@ -24,7 +24,7 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 async function inspect() {
   const result = await call('execute_luau', {
     datamodel_type: 'Client',
-    code: 'local p = game.Players.LocalPlayer local t = workspace:FindFirstChild("MinecraftTerrain") local meshes, parts, textured = 0, 0, 0 if t then for _, i in ipairs(t:GetDescendants()) do if i:IsA("BasePart") then parts += 1 end if i:IsA("MeshPart") then meshes += 1 if i.TextureContent.SourceType ~= Enum.ContentSourceType.None then textured += 1 end end end end return game.HttpService:JSONEncode({ userId = p.UserId, attributes = p:GetAttributes(), meshes = meshes, parts = parts, textured = textured, partitions = t and #t:GetChildren(), hud = p.PlayerGui:FindFirstChild("MinecraftHUD") ~= nil })',
+    code: 'local p = game.Players.LocalPlayer local s=p.PlayerGui.MinebloxDiagnostics:Invoke("snapshot") local t = workspace:FindFirstChild("MinecraftTerrain") local meshes, parts, textured = 0, 0, 0 if t then for _, i in ipairs(t:GetDescendants()) do if i:IsA("BasePart") then parts += 1 end if i:IsA("MeshPart") then meshes += 1 if i.TextureContent.SourceType ~= Enum.ContentSourceType.None or i:FindFirstChildOfClass("SurfaceAppearance") then textured += 1 end end end end return game.HttpService:JSONEncode({ minecraftName=s and s.minecraftName, userId = p.UserId, attributes = p:GetAttributes(), meshes = meshes, parts = parts, textured = textured, partitions = t and #t:GetChildren(), hud = p.PlayerGui:FindFirstChild("MinecraftHUD") ~= nil })',
   });
   if (result.isError) throw new Error(JSON.stringify(result));
   return JSON.parse(result.content.find((c) => c.type === 'text').text);
@@ -63,7 +63,9 @@ try {
       reject(error);
     });
   });
-  const name = `RB${initial.userId <= 0 ? 200000000000 + Math.abs(initial.userId) : initial.userId}`;
+  const name =
+    initial.minecraftName ??
+    `RB${initial.userId <= 0 ? 200000000000 + Math.abs(initial.userId) : initial.userId}`;
   const find = () =>
     Object.values(observer.entities).find((e) => e.username === name);
   for (let i = 0; i < 100 && !find(); i++) await sleep(50);
@@ -113,6 +115,8 @@ try {
     minecraftVersion: '1.21.4',
     observedPlayer: name,
     firstObservedMovementMs: firstObservedMs,
+    localCameraResponseMs: a.FirstCameraResponseMs,
+    cameraMovedBeforeNextState: a.CameraMovedBeforeStateUpdate,
     nativeObserved: {
       x: entity.position.x,
       y: entity.position.y,

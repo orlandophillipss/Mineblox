@@ -56,12 +56,20 @@ Bound delta journals and fall back to a snapshot when history is missing. Intere
 regions follow world movement, while camera frustum/culling stays client-local.
 Reconnect starts a new session/epoch, not continuation of an old input sequence.
 
-The shipped camera responds to look input immediately. Position presentation
-extrapolates Mineflayer's velocity for at most 200 ms, smooths small errors and
-snaps corrections/large errors. It freezes extrapolation on loss; it does not
-implement independent authoritative gameplay physics. Remote entities are
-interpolated simple visual models. Full timestamped entity buffers, equipment,
-skins, damage/removal/death event journals and input replay remain future work.
+The camera responds to look locally and interpolates fixed 20 Hz ordinary
+movement prediction steps at render rate. A bounded 64-frame history replays
+inputs beyond the bridge-observed client sequence. This sequence is not a
+Minecraft position acknowledgement. Reconciliation decays small display offsets
+and snaps forced movement or large divergence. Stale state freezes prediction.
+Remote entities have bounded timestamp buffers and 200 ms extrapolation limits.
+Common mobs use private texture/cuboid models; unsupported entities, equipment,
+skin ownership and exact animations remain unfinished.
+
+Discrete actions have separate sequences and a bounded deduplication/result
+journal. Real Mineflayer window/cursor state drives inventory UI. Mining,
+placement, attacks, chat and commands use the ordinary protocol player, with
+reach/occlusion and window checks in the gateway. Minecraft still owns outcomes.
+Local timeout-based air prediction is suppressed when building canonical terrain.
 
 ## Lifecycle and scalability
 

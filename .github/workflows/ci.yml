@@ -19,6 +19,7 @@ jobs:
       - run: npm run build
       - run: npm run tools:install
       - run: npm run check:luau
+      - run: npm run test:luau
       - run: npm test
       - run: npm run test:integration
       - run: npm run bench

@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 export const PROTOCOL_VERSION = 1;
 export const CONTROLS = [
   'forward',
@@ -44,8 +45,15 @@ export function validateInput(frame) {
   return frame;
 }
 
-export function minecraftName(robloxId) {
+export function minecraftName(robloxId, username) {
   if (typeof robloxId !== 'string' || !/^[1-9][0-9]{0,13}$/.test(robloxId))
     throw new BridgeError('Invalid Roblox user ID');
-  return `RB${robloxId}`;
+  if (username === undefined) return `RB${robloxId}`;
+  if (typeof username !== 'string' || !/^[A-Za-z0-9_]{3,20}$/.test(username))
+    throw new BridgeError('Invalid Roblox username');
+  return username.length <= 16
+    ? username
+    : username.slice(0, 11) +
+        '_' +
+        createHash('sha256').update(robloxId).digest('hex').slice(0, 4);
 }

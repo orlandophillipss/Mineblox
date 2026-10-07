@@ -1,0 +1,9 @@
+{
+  "offlineObserved": true,
+  "maxCameraDrift": 0,
+  "reconnectSeconds": 25.400711500000398,
+  "partitions": 12,
+  "newSession": true,
+  "date": "2026-10-07T21:30:32.616Z",
+  "note": "Existing Roblox Studio playtest survived a graceful server shutdown and restart; no client or Studio restart."
+}

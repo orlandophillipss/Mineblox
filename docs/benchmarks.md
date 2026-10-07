@@ -1,5 +1,49 @@
 # Validation and benchmark baseline — 2026-10-06
 
+## Patch 2 checks — 2026-10-07
+
+The [latest live fixture](measurements/playable-patch2-2026-10-07.json) passed
+bidirectional chat, command permission denial, real inventory split/move,
+server-observed mining/placement, invalid-target rejection, pig hurt, entity
+replication, dropped oak-log mesh, block viewport icon, real keyboard movement,
+inventory/chat UI and a loaded Creator Store UI sound. Local camera response was
+41.03 ms, before input acknowledgement; server-observed movement was 100.37 ms.
+After the key release, displayed/native-observer positions differed by 0.0514
+blocks. This is one sample, not smoothness or 1:1 parity across all movement.
+An earlier fixture had a graphical Minecraft client connected. The newest GUI
+launches exit during graphics startup with Windows error 0xC00000FD, including
+after Java 21 and a larger thread stack. This latest result explicitly records
+GUI presence as false and uses a separate real Minecraft protocol observer.
+
+The [paired profile](measurements/profile-patch2-2026-10-07.json) kept the same
+camera for off/on/off culling samples. Cached partitions remained 147. Visible
+MeshParts changed 529 → 267 → 529; visible triangles 55,880 → 26,730 → 55,880.
+Frame p95 was 5.48 / 5.53 / 5.54 ms. Culling reduced visible geometry but did not
+produce a measured frame-time improvement in this scene. Studio memory was about
+2.55 GiB per sample; periodic HTTP traffic was about seven requests/second.
+
+The [current terrain run](measurements/terrain-patch2-2026-10-07.json) sampled
+147 partitions in 37 calls with common models and foliage faces: 17,243 quads,
+832,892 JSON bytes, local work p50 4.53 ms and p95 12.82 ms. These are extraction,
+worker and serialization timings, not HTTP latency. Scenes differ from the
+earlier terrain baseline, so these figures do not establish a speedup.
+
+35 unit tests, the real TCP fixture, Luau invariants/compilation and syntax/lint
+checks passed during this patch. The audio uploader was checked with an injected
+HTTP fixture and a local preview; no external audio creation was attempted.
+Original image/model pixels, recordings and Minecraft binaries remain private.
+
+The [shutdown/reconnect test](measurements/reconnect-patch2-2026-10-07.json)
+kept the existing Studio playtest open while the development server stopped and
+restarted. The client reported disconnection, froze with zero measured camera
+drift, created a new Minecraft protocol session and resumed terrain streaming
+after 25.40 seconds. The launcher did not create another Studio instance.
+
+The [crack-overlay check](measurements/crack-patch2-2026-10-07.json) used official
+Studio mouse input against a real block: zero visible crack faces while idle,
+six while mining, and zero after release. This caught a Luau false/nil check
+that had left the last breaking texture visible on subsequent hovered blocks.
+
 ## Local Studio validation — 2026-10-07
 
 The Windows batch launcher successfully restored dependencies, started the real

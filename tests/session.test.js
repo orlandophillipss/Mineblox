@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { VirtualPlayer } from '../bridge/session.js';
 import { validateInput, minecraftName } from '../bridge/input.js';
 import { fakeBot } from './helpers.js';
+import { Vec3 } from 'vec3';
 
 const frame = { version: 1, seq: 1, controls: 33, yaw: 0.5, pitch: 0.1 };
 function setup() {
@@ -64,6 +65,30 @@ test('control input, accepted sequence, and server correction stay separate', ()
   assert.equal(player.snapshot().correction.position.x, 1);
   bot._client.state = 'configuration';
   assert.throws(() => player.apply({ ...frame, seq: 2 }), /reconfiguring/);
+  player.close();
+});
+
+test('Roblox usernames map within Minecraft limits and dropped stacks preserve item identity', () => {
+  assert.equal(minecraftName('123', 'Real_Username'), 'Real_Username');
+  const long = minecraftName('123', 'LongRobloxUsername20');
+  assert.equal(long.length, 16);
+  assert.notEqual(long, minecraftName('124', 'LongRobloxUsername20'));
+  for (const name of ['ab', 'bad name', '../player', 'x'.repeat(21), 123])
+    assert.throws(() => minecraftName('123', name));
+  const { player, bot } = setup();
+  bot.entities = {
+    10: {
+      id: 10,
+      name: 'item',
+      type: 'other',
+      position: new Vec3(1, 64, -2),
+      getDroppedItem: () => ({ name: 'oak_log', count: 3 }),
+    },
+  };
+  assert.deepEqual(player.snapshot().entities[0].item, {
+    name: 'oak_log',
+    count: 3,
+  });
   player.close();
 });
 

@@ -30,7 +30,12 @@ export function greedyMesh(
             const q = [...p];
             q[axis] += sign;
             const b = material(read(q), axis, -sign);
-            if (b && (b.opaque || (!a.opaque && b.key === a.key))) continue;
+            if (
+              b &&
+              (b.opaque ||
+                (!a.opaque && a.cullSame !== false && b.key === a.key))
+            )
+              continue;
             mask[i + dims[u] * j] = a.key;
           }
         for (let j = 0; j < dims[v]; j++)

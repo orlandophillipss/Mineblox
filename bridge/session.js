@@ -1,6 +1,7 @@
 import { EventEmitter } from 'node:events';
 import { performance } from 'node:perf_hooks';
 import { randomUUID } from 'node:crypto';
+import { Actions } from './actions.js';
 import {
   BridgeError,
   CONTROLS,
@@ -14,6 +15,8 @@ import {
 export class VirtualPlayer extends EventEmitter {
   constructor({
     robloxId,
+    username,
+    displayName,
     createBot,
     minecraft,
     now = () => performance.now(),
@@ -24,7 +27,9 @@ export class VirtualPlayer extends EventEmitter {
     super();
     this.id = randomUUID();
     this.robloxId = robloxId;
-    this.name = minecraftName(robloxId);
+    this.name = minecraftName(robloxId, username);
+    this.username = username ?? this.name;
+    this.displayName = displayName ?? this.username;
     this.seq = 0;
     this.status = 'connecting';
     this.now = now;
@@ -46,6 +51,37 @@ export class VirtualPlayer extends EventEmitter {
       auth: 'offline',
       viewDistance: 'tiny',
     });
+    this.events = [];
+    this.eventSeq = 0;
+    this.physicsTick = 0;
+    this.actions = new Actions(this);
+    this.bot.on('physicsTick', () => {
+      this.physicsTick++;
+    });
+    this.bot.on('messagestr', (text, position, _message, sender) =>
+      this.event('chat', {
+        text: String(text).slice(0, 512),
+        position,
+        sender: sender ?? null,
+      }),
+    );
+    this.bot.on('health', () =>
+      this.event('health', { health: this.bot.health, food: this.bot.food }),
+    );
+    this.bot.on('entityHurt', (entity) =>
+      this.event('entityHurt', { id: entity.id }),
+    );
+    this.bot.on('playerCollect', (collector, collected) =>
+      this.event('pickup', {
+        collector: collector.id,
+        collected: collected.id,
+      }),
+    );
+    this.bot.on('soundEffectHeard', (...args) =>
+      this.event('sound', {
+        name: String(args[0]?.soundName ?? args[0]).slice(0, 100),
+      }),
+    );
     this.bot.on('spawn', () => {
       if (this.status === 'closed') return;
       this.status = 'ready';
@@ -156,13 +192,53 @@ export class VirtualPlayer extends EventEmitter {
     return p ? { x: p.x, y: p.y, z: p.z } : null;
   }
 
+  event(kind, data) {
+    this.events.push({ seq: ++this.eventSeq, kind, data });
+    if (this.events.length > 32) this.events.shift();
+  }
+
   snapshot() {
     return {
       version: PROTOCOL_VERSION,
       id: this.id,
       robloxId: this.robloxId,
+      minecraftName: this.name,
+      username: this.username,
+      displayName: this.displayName,
       status: this.status,
       acceptedSeq: this.seq,
+      physicsTick: this.physicsTick,
+      jumpTicks: this.bot.jumpTicks ?? 0,
+      events: this.events.slice(-16),
+      actions: this.actions.records.slice(-16),
+      gameMode: this.bot.game?.gameMode ?? 'survival',
+      inventory: (() => {
+        const window = this.bot.currentWindow ?? this.bot.inventory;
+        const serialize = (item) =>
+          item
+            ? {
+                name: item.name,
+                displayName: item.displayName ?? item.name,
+                count: item.count,
+                type: item.type,
+                slot: item.slot,
+              }
+            : false;
+        return window
+          ? {
+              id: window.id,
+              type: window.type ?? 'minecraft:inventory',
+              title:
+                typeof window.title === 'string'
+                  ? window.title.slice(0, 100)
+                  : 'Inventory',
+              inventoryStart: window.inventoryStart ?? 9,
+              inventoryEnd: window.inventoryEnd ?? 45,
+              slots: Array.from(window.slots, serialize),
+              cursor: serialize(window.selectedItem),
+            }
+          : null;
+      })(),
       bridgeTimeMs: this.now(),
       entityId: this.bot.entity?.id ?? null,
       minecraftUuid: this.bot.player?.uuid ?? null,
@@ -209,6 +285,20 @@ export class VirtualPlayer extends EventEmitter {
           position: { x: e.position.x, y: e.position.y, z: e.position.z },
           yaw: e.yaw ?? 0,
           pitch: e.pitch ?? 0,
+          velocity: e.velocity
+            ? { x: e.velocity.x, y: e.velocity.y, z: e.velocity.z }
+            : { x: 0, y: 0, z: 0 },
+          width: e.width ?? 0.6,
+          height: e.height ?? 1.8,
+          flags: e.metadata?.[0] ?? 0,
+          item: (() => {
+            try {
+              const item = e.getDroppedItem?.();
+              return item ? { name: item.name, count: item.count } : null;
+            } catch {
+              return null;
+            }
+          })(),
         })),
       dimension: this.bot.game?.dimension ?? null,
     };

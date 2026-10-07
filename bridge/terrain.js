@@ -1,5 +1,6 @@
 import { Worker } from 'node:worker_threads';
 import { BridgeError } from './input.js';
+import { stateFaces } from './models.js';
 
 const colors = {
   grass_block: [95, 149, 55],
@@ -15,22 +16,39 @@ export function partitionKey(position) {
     .map((n) => Math.floor(n / 8))
     .join(',');
 }
-export function interestKeys(position) {
+export function interestKeys(position, { radius = 2, velocity } = {}) {
+  if (!Number.isInteger(radius) || radius < 2 || radius > 4)
+    throw new Error('Invalid terrain radius');
   const [x, y, z] = partitionKey(position).split(',').map(Number);
   const keys = [];
   for (let dy = -1; dy <= 1; dy++)
-    for (let dz = -2; dz <= 2; dz++)
-      for (let dx = -2; dx <= 2; dx++)
+    for (let dz = -radius; dz <= radius; dz++)
+      for (let dx = -radius; dx <= radius; dx++)
         keys.push({
           key: `${x + dx},${y + dy},${z + dz}`,
-          distance: dx * dx + dz * dz + dy * dy,
+          distance:
+            dx * dx +
+            dz * dz +
+            dy * dy -
+            (Math.abs(dx) + Math.abs(dz) > 1
+              ? Math.max(
+                  -1.5,
+                  Math.min(
+                    1.5,
+                    (dx * (velocity?.x ?? 0) + dz * (velocity?.z ?? 0)) * 4,
+                  ),
+                )
+              : 0),
         });
   return keys.sort((a, b) => a.distance - b.distance).map((p) => p.key);
 }
 
 // One bounded worker queue prevents mesh work from blocking gameplay exchanges.
 export class TerrainService {
-  constructor() {
+  constructor({ models = {}, radius = 2 } = {}) {
+    this.models = models;
+    this.radius = radius;
+    this.maxPartitions = 3 * (radius * 2 + 1) ** 2;
     this.worker = null;
     this.pending = new Map();
     this.serial = 0;
@@ -128,6 +146,7 @@ export class TerrainService {
       const origin = key.split(',').map((n) => Number(n) * 8);
       const data = new Uint32Array(512),
         palette = new Map();
+      const neighbors = {};
       const p = player.bot.entity.position.clone();
       for (let y = 0; y < 8; y++)
         for (let z = 0; z < 8; z++)
@@ -149,6 +168,13 @@ export class TerrainService {
               cube,
               opaque: !block.transparent,
               shapes,
+              modelFaces: !cube
+                ? stateFaces(
+                    this.models,
+                    block.name,
+                    block.getProperties?.() ?? {},
+                  )
+                : null,
               color:
                 colors[block.name] ??
                 (/leaves/.test(block.name)
@@ -158,20 +184,59 @@ export class TerrainService {
                     : [155, 155, 155]),
             });
           }
+      // A one-face-thick halo removes duplicate internal partition faces.
+      for (let axis = 0; axis < 3; axis++)
+        for (const side of [-1, 8])
+          for (let a = 0; a < 8; a++)
+            for (let b = 0; b < 8; b++) {
+              const at = [...origin];
+              at[axis] += side;
+              at[(axis + 1) % 3] += a;
+              at[(axis + 2) % 3] += b;
+              const block = player.bot.blockAt(p.set(...at));
+              if (!block) continue;
+              const shapes = block.shapes ?? [];
+              const cube =
+                shapes.length === 1 &&
+                shapes[0].every((n, i) => n === (i < 3 ? 0 : 1));
+              if (
+                (cube && !block.transparent) ||
+                ['water', 'lava'].includes(block.name)
+              )
+                neighbors[at.join(',')] = block.stateId;
+              if (!palette.has(block.stateId))
+                palette.set(block.stateId, {
+                  state: block.stateId,
+                  name: block.name,
+                  cube,
+                  opaque: !block.transparent,
+                  shapes,
+                  properties: block.getProperties?.() ?? {},
+                  color: colors[block.name] ?? [155, 155, 155],
+                });
+            }
       const materials = [...palette.values()];
-      const quads = await this.mesh({ origin, data, palette: materials });
+      const quads = await this.mesh({
+        origin,
+        data,
+        palette: materials,
+        neighbors,
+      });
       const result = {
         key,
         revision: revision + 1,
         origin,
         quads,
+        voxels: Array.from(data),
         palette: materials.map(
-          ({ state, name, color, opaque, properties }) => ({
+          ({ state, name, color, opaque, properties, shapes, modelFaces }) => ({
             state,
             name,
             color,
             opaque,
             properties,
+            shapes,
+            modelFaces,
           }),
         ),
       };
@@ -198,7 +263,7 @@ export class TerrainService {
       !known ||
       typeof known !== 'object' ||
       Array.isArray(known) ||
-      Object.keys(known).length > 75 ||
+      Object.keys(known).length > this.maxPartitions ||
       Object.entries(known).some(
         ([k, v]) =>
           !/^-?\d{1,9},-?\d{1,9},-?\d{1,9}$/.test(k) ||
@@ -208,7 +273,10 @@ export class TerrainService {
     )
       throw new BridgeError('Invalid terrain revisions');
     const state = this.state(player);
-    const active = interestKeys(player.bot.entity.position);
+    const active = interestKeys(player.bot.entity.position, {
+      radius: this.radius,
+      velocity: player.bot.entity.velocity,
+    });
     for (const k of state.cache.keys())
       if (!active.includes(k)) state.cache.delete(k);
     const partitions = [];
@@ -223,6 +291,8 @@ export class TerrainService {
     return {
       id: player.id,
       version: 1,
+      voxelFormat: 'state-u32-xzy-v1',
+      minecraftVersion: '1.21.4',
       epoch: state.epoch,
       dimension: player.bot.game?.dimension,
       active,

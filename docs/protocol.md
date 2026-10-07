@@ -5,7 +5,14 @@ document describes the Roblox/gateway boundary and separate voxel experiment.
 One trusted Roblox server may use one gateway. All HTTP requests require
 `Authorization: Bearer <BRIDGE_TOKEN>`; secrets stay server-side. Use HTTPS when
 leaving localhost. JSON is intentionally limited to the small control/input
-spike; terrain is not embedded in gameplay exchanges.
+spike; terrain is not embedded in gameplay exchanges. Optional Patch 2 fields
+extend the control envelope. Terrain explicitly identifies its voxel schema.
+
+Session creation accepts optional `username` and `displayName` from the trusted
+Roblox server, derived from its Player object. Protocol usernames are capped at
+16 characters; long Roblox names receive a stable shortened name and ID suffix.
+Display aliases affect Roblox chat. `minecraftName`, username/displayName and a
+bounded connected-player roster are returned in state.
 
 ## Endpoints
 
@@ -54,9 +61,8 @@ server confirmation of every intervening predicted move.
 
 Send fresh complete frames at least 5 Hz, including idle controls. Inputs that
 arrive after newer frames fail 409. If a response is lost, a retry may return 409;
-send a newer full frame and recover state. Do not apply this retry rule to future
-discrete attacks/digging: those require unique action IDs and bounded result
-journals. Held controls stop after 750 ms without a new accepted input. Sessions
+send a newer full frame and recover state. Discrete actions use their own unique
+sequences and bounded result journal. Held controls stop after 750 ms without a new accepted input. Sessions
 close after 30 seconds of inactivity. The CLI's leases differ for manual use.
 
 HTTP exchange is shared/batched at 5 Hz for an entire Roblox server (300 requests/
@@ -68,16 +74,33 @@ separate from bridge delivery sequence checks. Camera/look input is local at ren
 rate; Roblox intention frames are sent at 20 Hz and gateway batches at 5 Hz.
 State also includes velocity (blocks/tick), worldEpoch, nearby entities (max 128,
 within 48 blocks), server health/food, hotbar, held slot and experience.
+Patch 2 adds physics tick/jump cooldown, actual inventory window/slots/cursor,
+bounded events and action results, entity dimensions/velocities and dropped-item
+name/count. Empty inventory slots are `false` to preserve Luau array iteration.
+Roblox annotates responses with stateSeq, observedClientSeq and local input time;
+these describe bridge delivery/application, never Minecraft position acceptance.
+
+Each exchange entry may include up to four `actions`, each with `seq`, `epoch`
+and `kind`. Kinds: chat, complete, dig, cancelDig, place, useBlock, attack,
+useEntity, click, closeWindow, drop, useItem, respawn. Unknown fields are rejected.
+Targets/face vectors, live window IDs and slots, chat controls/length and entity
+reach/occlusion are validated. Action results (pending/sent/rejected) are bounded;
+`sent` means the library operation completed, not proof of all gameplay outcomes.
+Use server state/events to inspect outcomes. Published external chat fails closed.
 
 ## Terrain streaming envelope
 
 Terrain has its own 2 Hz budget and worker, separate from gameplay. Interest follows
-the Minecraft player's position, never camera movement: 75 partitions of 8^3
+the Minecraft player's position, never camera movement: default 75 partitions,
+147 in the launcher, with a configurable radius 2–4, each containing 8^3
 voxels, nearest first. The cache is per session/world epoch and bounded to active
 interest. A session is bound to one Minecraft server and its current dimension.
 Each response carries version, session id, epoch, dimension, active keys and up
 to four full partition meshes per player. Quad arrays are
-`[axis, sign, x, y, z, width, height, stateId]`, with a material palette.
+`[axis, sign, x, y, z, width, height, stateId, optionalModelFaceIndex]`, with a
+material palette containing collision shapes and optional model face data.
+Each partition includes 512 canonical `voxels`, independent from its mesh.
+The terrain `voxelFormat` is `state-u32-xzy-v1` for pinned Minecraft 1.21.4.
 
 `known` is a dictionary of successfully rendered revisions, not an acknowledgement
 of merely receiving a response. Omit it when empty: Roblox JSONEncode encodes an
@@ -89,9 +112,9 @@ affected partition and boundary neighbors. Chunk load/unload invalidates nearby
 partitions. Mesh jobs invalidated during work are discarded. Meshes cap at 4,096
 quads per partition; a full model/delta journal is future work.
 
-Production event sequencing, tick IDs, multi-server ownership and resume remain
-unfinished. Full Minecraft blockstate variants, multipart visuals and fluid
-surfaces are not covered by collision-shape fallback geometry.
+Production reliable event journals, multi-server ownership and resume remain
+unfinished. A bounded curated model catalog supplies variants/multipart geometry;
+full model coverage, UV-lock, fluid slopes and waterlogging remain incomplete.
 
 ## Binary voxel experiment
 

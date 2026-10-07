@@ -1,6 +1,8 @@
 local Hud = {}
 Hud.__index = Hud
 local Images = require(script.Parent.Images)
+local Font = require(script.Parent.Font)
+local ItemVisual=require(script.Parent.ItemVisual)
 local function sprite(parent, image, size, position)
 	if not image then return nil end
 	local label = Instance.new("ImageLabel") label.BackgroundTransparency = 1 label.Size = size label.Position = position
@@ -24,13 +26,13 @@ local function label(parent, text, size, position, color)
 	l.TextColor3 = color or Color3.new(1, 1, 1)
 	l.TextStrokeTransparency = 0.3
 	l.Text, l.Parent = text, parent
-	return l
+	return Font.attach(l)
 end
 function Hud.new(player)
 	local gui = Instance.new("ScreenGui")
 	gui.Name = "MinecraftHUD" gui.ResetOnSpawn = false gui.IgnoreGuiInset = true
 	gui.Parent = player:WaitForChild("PlayerGui")
-	local root = frame(gui, UDim2.fromOffset(364, 100), UDim2.new(0.5, -182, 1, -112), Color3.new())
+	local root = frame(gui, UDim2.fromOffset(364, 100), UDim2.new(0.5, -182, 1, -100), Color3.new())
 	root.BackgroundTransparency = 1
 	local slots = {}
 	sprite(root, Images.gui("hotbar"), UDim2.fromOffset(364, 44), UDim2.fromOffset(0, 56))
@@ -39,7 +41,9 @@ function Hud.new(player)
 		local stroke = Instance.new("UIStroke") stroke.Thickness = 2 stroke.Color = Color3.fromRGB(135, 135, 135) stroke.Parent = slot
 		local name = label(slot, "", UDim2.fromOffset(36, 24), UDim2.fromOffset(2, 1)) name.TextSize = 10 name.TextWrapped = true
 		local count = label(slot, "", UDim2.fromOffset(20, 15), UDim2.fromOffset(18, 25)) count.TextSize = 14
-		slots[i] = { frame = slot, stroke = stroke, name = name, count = count }
+		local icon=Instance.new("ImageLabel") icon.BackgroundTransparency=1 icon.Size=UDim2.fromOffset(32,32) icon.Position=UDim2.fromOffset(4,4) icon.ResampleMode=Enum.ResamplerMode.Pixelated icon.Parent=slot
+		count.ZIndex=3
+		slots[i] = { frame = slot, stroke = stroke, name = name, count = count, icon=icon,blockIcon=ItemVisual.icon(slot,UDim2.fromOffset(36,36),UDim2.fromOffset(2,2)) }
 		if Images.gui("hotbar") then slot.BackgroundTransparency = 1 stroke.Enabled = false end
 	end
 	local hearts, hunger = {}, {}
@@ -47,17 +51,19 @@ function Hud.new(player)
 	for i = 1, 10 do
 		hearts[i] = label(root, "♥", UDim2.fromOffset(18, 24), UDim2.fromOffset((i - 1) * 18, 18), Color3.fromRGB(224, 43, 43))
 		hunger[i] = label(root, "◆", UDim2.fromOffset(18, 24), UDim2.fromOffset(184 + (i - 1) * 18, 18), Color3.fromRGB(170, 112, 52))
-		heartImages[i] = sprite(root, Images.gui("heartFull"), UDim2.fromOffset(18, 18), UDim2.fromOffset((i - 1) * 18, 20))
-		foodImages[i] = sprite(root, Images.gui("foodFull"), UDim2.fromOffset(18, 18), UDim2.fromOffset(184 + (i - 1) * 18, 20))
+		sprite(root, Images.gui("heartEmpty"), UDim2.fromOffset(18,18),UDim2.fromOffset((i-1)*16,22))
+		sprite(root, Images.gui("foodEmpty"), UDim2.fromOffset(18,18),UDim2.fromOffset(202+(i-1)*16,22))
+		heartImages[i] = sprite(root, Images.gui("heartFull"), UDim2.fromOffset(18, 18), UDim2.fromOffset((i - 1) * 16, 22))
+		foodImages[i] = sprite(root, Images.gui("foodFull"), UDim2.fromOffset(18, 18), UDim2.fromOffset(202 + (i - 1) * 16, 22))
 		if heartImages[i] then hearts[i].Visible = false end
 		if foodImages[i] then hunger[i].Visible = false end
 	end
-	local xpBack = frame(root, UDim2.fromOffset(360, 5), UDim2.fromOffset(2, 47), Color3.fromRGB(20, 35, 14))
+	local xpBack = frame(root, UDim2.fromOffset(364, 10), UDim2.fromOffset(0, 42), Color3.fromRGB(20, 35, 14))
 	local xp = frame(xpBack, UDim2.fromScale(0, 1), UDim2.fromScale(0, 0), Color3.fromRGB(127, 205, 45))
-	if sprite(xpBack, Images.gui("experienceBack"), UDim2.fromOffset(360, 10), UDim2.fromOffset(0, 0)) then
-		xpBack.Size = UDim2.fromOffset(360, 10)
+	if sprite(xpBack, Images.gui("experienceBack"), UDim2.fromOffset(364, 10), UDim2.fromOffset(0, 0)) then
+		xpBack.Size = UDim2.fromOffset(364, 10)
 		xpBack.BackgroundTransparency = 1 xp.BackgroundTransparency = 1 xp.ClipsDescendants = true xp.Size = UDim2.fromScale(0, 2) xp.ZIndex = 2
-		local fill = sprite(xp, Images.gui("experienceFill"), UDim2.fromOffset(360, 10), UDim2.fromOffset(0, 0)) if fill then fill.ZIndex = 2 end
+		local fill = sprite(xp, Images.gui("experienceFill"), UDim2.fromOffset(364, 10), UDim2.fromOffset(0, 0)) if fill then fill.ZIndex = 2 end
 	end
 	local level = label(root, "", UDim2.fromOffset(60, 22), UDim2.fromOffset(152, 27), Color3.fromRGB(130, 240, 70))
 	if not sprite(gui, Images.gui("crosshair"), UDim2.fromOffset(30, 30), UDim2.new(0.5, -15, 0.5, -15)) then
@@ -84,6 +90,10 @@ function Hud:update(state)
 	for i, slot in ipairs(self.slots) do
 		local item = state.hotbar and state.hotbar[i]
 		slot.name.Text = type(item) == "table" and string.gsub(item.name, "_", " ") or ""
+		local image=type(item)=="table" and Images.item(item.name) or nil
+		local block=ItemVisual.update(slot.blockIcon,type(item)=="table" and item.name or nil)
+		slot.icon.Visible=image~=nil and not block slot.name.Visible=not image and not block
+		if image then slot.icon.ImageContent=Content.fromObject(image) end
 		slot.count.Text = type(item) == "table" and item.count > 1 and tostring(item.count) or ""
 	end
 	local experience = state.experience or {}
@@ -91,5 +101,7 @@ function Hud:update(state)
 	self.level.Text = (experience.level or 0) > 0 and tostring(experience.level) or ""
 	local p = state.predicted.position
 	self.info.Text = string.format("Minecraft %s   %.1f / %.1f / %.1f   %.0f ms", state.dimension or "", p.x, p.y, p.z, state.roundTripMs or 0)
+	local player=game.Players.LocalPlayer
+	self.info.Text ..= string.format("  %.0f FPS  %d/%d regions  error %.3f",1000/math.max(player:GetAttribute("FrameMs") or 16,1),player:GetAttribute("VisiblePartitions") or 0,player:GetAttribute("CachedPartitions") or 0,player:GetAttribute("ReconciliationBlocks") or 0)
 end
 return Hud

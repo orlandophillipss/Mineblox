@@ -15,7 +15,7 @@ Minecraft asset usage/upload rights are not granted by the provider's website li
 The generated hierarchy embeds:
 
 - ServerScriptService: server lifecycle/remotes, BridgeTransport and private config.
-- ReplicatedStorage/MinebloxClient: Renderer, Images, Hud and private pixel data.
+- ReplicatedStorage/MinebloxClient: Renderer, World/Prediction, Interpolation, Hud/Font/Interface, ItemVisual/EntityVisual, Sky, Sounds/AudioConfig and private pixels.
 - StarterPlayerScripts: first-person input/camera, entity presentation and render queue.
 
 Player identity is derived from the server Player object. Studio's simulated
@@ -30,21 +30,18 @@ Published games reject development string secrets and require HTTPS plus a
 Roblox Secret named MINEBLOX_TOKEN. The repository does not provision a public gateway.
 
 Four studs represent one Minecraft block. Camera look is immediate; movement
-display follows Mineflayer prediction, extrapolated at most 200 ms, then smoothed.
+display interpolates fixed 20 Hz local prediction with bounded input replay.
 Server corrections/large errors snap. Position, health, block outcomes and inventory
-are never accepted from the Roblox client. Generic Minecraft entities use simple
-visuals; original skins/equipment/animations remain future work.
+are never accepted from the Roblox client. Common mobs use private textured cuboid models; exact geometry/equipment/animations remain unfinished.
 
 Terrain uses 8^3 partitions in a bounded player-driven interest region. Each
 texture batch uses a fixed-size EditableMesh with repeated block-scale UVs.
-Allocation failure logs a warning and uses greedy-face geometry with substitute
-colors. Minecraft HUD sprites are private EditableImages, not uploaded assets.
+Allocation failure logs a warning and caps incomplete substitute previews to 16 faces per partition, with delayed retry. Minecraft HUD sprites are private EditableImages, not uploaded assets.
 The common material catalogue covers the locally observed forest, but full
 blockstate/multipart/fluid/biome/lighting fidelity is not implemented.
 
 Controls: WASD, Space, Ctrl sprint, Shift sneak, mouse look, 1–9/wheel held slot,
-Tab cursor release. Hotbar selection is forwarded to Minecraft; block interaction,
-combat and inventory transactions are not exposed yet.
+Tab cursor release, left-click mine/attack, right-click place, Shift-right-click use block, E inventory, Q drop, T or / chat, F3 diagnostics. /names display|username switches Roblox chat aliases. /sound on|off and /music on|off control audio.
 
 Developer tools (prefix with `rtk proxy` on the founding workstation):
 

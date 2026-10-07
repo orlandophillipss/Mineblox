@@ -21,6 +21,10 @@ complete Minecraft client parity or published crossplay.
 - Separate terrain worker/cache, render acknowledgements, eviction and dimension/session reset handling.
 - Real HUD sprites, server-backed health/food/experience/hotbar and simple entity interpolation.
 - Roblox keyboard movement observed by a separate Minecraft protocol client with settled coordinate comparison.
+- Fixed-tick local movement prediction/input replay and bounded remote interpolation.
+- Server-validated mining, placement, attacks, real window/cursor inventory, chat and commands.
+- Viewport block icons, dropped-item metadata/meshes, common private mob skins and bitmap text UI.
+- Creator Store effects, optional permitted music/importer and reconnect backoff.
 
 Exact executed live validation and measurements are in benchmarks.md.
 
@@ -34,7 +38,7 @@ Minecraft observer test are available; no production latency/scaling claim appli
 
 1. Full blockstate/multipart/plant/fluid visuals, rotated textures and biome/light handling.
 2. Latency distributions, frame-time measurements, repeated streaming and device/load tests.
-3. Authoritative block interactions and inventory transactions, verified with a native graphical client.
+3. Extend container/item/entity coverage and repeat graphical Minecraft comparisons after the local GUI crash is resolved.
 
 ## Following vertical slices
 
@@ -49,5 +53,6 @@ Published Roblox deployment requires a reachable authenticated HTTPS gateway.
 No online-mode Minecraft identity linking,
 Microsoft credentials, multi-game-server isolation or production asset rights
 resolution is provided. Go gateway adoption waits for measured need. Continuous
-shared production world cache, event journals, block actions, combat and inventory
-transactions remain unfinished. Minecraft remains their authority.
+shared production world cache, reliable event journals, exact movement/fluid
+prediction, complete entity/equipment rendering and all container interactions
+remain unfinished. Minecraft remains their authority.

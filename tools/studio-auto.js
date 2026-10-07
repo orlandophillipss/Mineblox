@@ -11,7 +11,9 @@ try {
       args: [path.resolve('tools/mcp-proxy.js')],
     }),
   );
-  const { url } = JSON.parse(await readFile('.local/launcher.json', 'utf8'));
+  const { generation } = JSON.parse(
+    await readFile('.local/roblox/generation.json', 'utf8'),
+  );
   let selected;
   for (let attempt = 0; attempt < 20 && !selected; attempt++) {
     const tools = await client.listTools();
@@ -29,7 +31,7 @@ try {
         arguments: {
           studio_id: studio.id,
           datamodel_type: 'Edit',
-          code: `local c = game.ServerScriptService:FindFirstChild("DevelopmentConfig") return c ~= nil and string.find(c.Source, ${JSON.stringify(url)}, 1, true) ~= nil`,
+          code: `local c = game.ServerScriptService:FindFirstChild("DevelopmentConfig") return c ~= nil and string.find(c.Source, ${JSON.stringify(generation)}, 1, true) ~= nil`,
         },
       });
       if (

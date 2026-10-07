@@ -73,6 +73,7 @@ for (const [repo, tag, filename, directory, executable] of packages) {
   else {
     execFileSync('unzip', ['-o', archive, '-d', target], { stdio: 'ignore' });
     await chmod(path.join(target, executable), 0o755);
+    if (directory === 'luau') await chmod(path.join(target, 'luau'), 0o755);
   }
   await writeFile(
     path.join(target, 'release.json'),

@@ -1,4 +1,4 @@
-param([switch]$MinecraftAssets)
+param([switch]$MinecraftAssets, [switch]$ImportAudio)
 $ErrorActionPreference = 'Stop'
 $workspace = Split-Path -Parent $PSScriptRoot
 Set-Location -LiteralPath $workspace
@@ -39,6 +39,10 @@ if (-not (Test-Path -LiteralPath 'node_modules/mineflayer') -or $lockHash -ne $i
     & npm.cmd ci
     if ($LASTEXITCODE -ne 0) { throw 'Dependency installation failed' }
     Set-Content -LiteralPath '.local/dependencies.sha256' -Value $lockHash
+}
+if ($ImportAudio) {
+    & node --env-file-if-exists=.env tools/import-audio.js --upload
+    if ($LASTEXITCODE -ne 0) { throw 'Audio import failed; inspect the saved operation journal before retrying' }
 }
 if ($MinecraftAssets) { & node tools/prepare-roblox-assets.js --remote } else { & node tools/prepare-roblox-assets.js }
 if ($LASTEXITCODE -ne 0) { throw 'Asset preparation failed' }

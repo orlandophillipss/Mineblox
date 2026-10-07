@@ -31,18 +31,21 @@ hotbar contents and nearby entity positions come from Minecraft. The default
 server uses vanilla terrain generation, seed 12345 and survival mode; the older
 flat test world is preserved separately.
 
-The final Studio/Minecraft observer test measured a settled position difference
-of 0.00047 blocks after moving 8.21 blocks. This is one local sample, not a claim
-of zero latency or full Minecraft client parity. Complex block models, fluids,
-block actions, combat/inventory interactions, online authentication and published
-Roblox deployment remain unfinished.
+Patch 2 adds local movement prediction/reconciliation, canonical collision voxels,
+common block models, real window/cursor inventory, mining/placement, attacks,
+chat/commands, dropped-item visuals, block viewport icons and Creator Store sound
+effects. Minecraft owns the outcomes. [Parity status](docs/parity.md) records
+remaining gaps; full 1:1 client behavior is not established.
 
 ## One-file Windows launch
 
 Double-click **Mineblox.bat**. It installs missing Node/Java and portable Roblox
 build tools, restores pinned dependencies, starts Minecraft and the loopback
 bridge, builds the private place and opens Studio. With Studio's MCP enabled,
-Play starts automatically. Keep the launcher window open; Ctrl+C stops services.
+Play starts automatically. The launcher reuses its managed Studio window and
+private loopback credential/port across restarts. Keep the launcher window open;
+Ctrl+C stops services. Remove ignored `.local/launcher.json` to rotate the credential
+after stopping the launcher.
 Roblox Studio must be installed and signed in. Enable **Studio as an MCP server**
 in Assistant → … → Manage MCP Servers once. The official Studio MCP is used;
 no third-party Studio plugin is required.
@@ -60,7 +63,10 @@ Do not publish the generated development place. A new installation still needs
 explicit Minecraft EULA acceptance; existing acceptance is preserved.
 
 Controls: WASD, Space to jump, Ctrl to sprint, Shift to sneak, mouse to look,
-1–9/wheel to select the held slot, Tab to release the cursor. Native Java 1.21.4
+1–9/wheel to select the held slot, left click to mine/attack, right click to place,
+Shift-right-click to use a block, E inventory, Q drop, T or / chat, F3 diagnostics,
+Tab to release the cursor. `/names display|username` changes Roblox chat names;
+`/sound on|off` and `/music on|off` control configured audio. Native Java 1.21.4
 clients connect to **127.0.0.1:25565**.
 
 ## Local development
@@ -138,6 +144,7 @@ npm run lint
 npm run build
 npm test
 npm run test:integration
+npm run test:luau
 npm run bench
 ```
 
@@ -153,3 +160,6 @@ Read [architecture](docs/architecture.md), [ADR](docs/adr/0001-authoritative-ser
 [roadmap](docs/roadmap.md), and [agent instructions](AGENTS.md) before extending
 the bridge. Go/Rust alternatives were evaluated; the initial single-runtime
 adapter prioritizes the first working protocol slice.
+
+See [audio configuration/import](docs/audio.md) for permitted audio assets and
+[water behavior](docs/water.md) for the current fluid rendering boundaries.

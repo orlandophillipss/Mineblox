@@ -55,7 +55,7 @@ test('stream revisions recover lost snapshots, invalidate block edits and reset 
   const { player, bot, terrain, change } = setup(t);
   const first = await terrain.stream(player);
   assert.equal(first.partitions.length, 4);
-  assert.ok(first.partitions.some((p) => p.quads.length === 6));
+  assert.ok(first.partitions.some((p) => p.quads.length === 1));
   const retry = await terrain.stream(player);
   assert.deepEqual(retry.partitions, first.partitions);
   const known = Object.fromEntries(
@@ -68,7 +68,11 @@ test('stream revisions recover lost snapshots, invalidate block edits and reset 
   const changed = await terrain.stream(player, { epoch: first.epoch, known });
   const dirty = changed.partitions.find((p) => p.key === '0,7,0');
   assert.ok(dirty.revision > known[dirty.key]);
-  assert.ok(dirty.quads.length > 6);
+  assert.ok(
+    dirty.quads.length >
+      first.partitions.find((p) => p.key === dirty.key).quads.length,
+  );
+  assert.equal(dirty.voxels[8 * 8 * 7], 0);
   bot.game.dimension = 'the_nether';
   bot.emit('spawn');
   const respawn = await terrain.stream(player, { epoch: first.epoch, known });

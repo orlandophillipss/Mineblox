@@ -24,6 +24,7 @@
     "minecraft:start": "node tools/minecraft.js start",
     "start": "node tools/launcher.js",
     "check:luau": "node tools/check-luau.js",
+    "test:luau": "node tools/test-luau.js",
     "tools:install": "node tools/install-tools.js",
     "bench:terrain": "node tools/terrain-bench.js",
     "roblox:assets": "node tools/prepare-roblox-assets.js --remote",

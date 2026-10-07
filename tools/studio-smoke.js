@@ -25,12 +25,14 @@ try {
     const studios = JSON.parse(
       list.content.find((c) => c.type === 'text').text,
     ).studios;
-    const { url } = JSON.parse(await readFile('.local/launcher.json', 'utf8'));
+    const { generation } = JSON.parse(
+      await readFile('.local/roblox/generation.json', 'utf8'),
+    );
     for (const studio of studios.filter((s) => s.name === 'Mineblox.rbxlx')) {
       const result = await call('execute_luau', {
         studio_id: studio.id,
         datamodel_type: 'Edit',
-        code: `local c = game.ServerScriptService:FindFirstChild("DevelopmentConfig") return c ~= nil and string.find(c.Source, ${JSON.stringify(url)}, 1, true) ~= nil`,
+        code: `local c = game.ServerScriptService:FindFirstChild("DevelopmentConfig") return c ~= nil and string.find(c.Source, ${JSON.stringify(generation)}, 1, true) ~= nil`,
       });
       console.log(studio.id, JSON.stringify(result));
       if (

@@ -1,5 +1,6 @@
 local AssetService = game:GetService("AssetService")
 local Images = require(script.Parent.Images)
+local Visibility=require(script.Parent.Visibility)
 local Renderer = {}
 Renderer.__index = Renderer
 local SCALE = 4
@@ -9,13 +10,18 @@ local function destroy(entry)
 end
 function Renderer.new()
 	local root = Instance.new("Folder") root.Name = "MinecraftTerrain" root.Parent = workspace
-	return setmetatable({ root = root, parts = {}, epoch = nil, meshAvailable = true, count = 0 }, Renderer)
+	return setmetatable({ root = root, parts = {}, epoch = nil, meshAvailable = true, count = 0, triangles=0,visible=0 }, Renderer)
 end
 function Renderer:clear()
 	for _, entry in pairs(self.parts) do destroy(entry) end
 	self.parts = {} self.count = 0
 end
-local function vertices(q)
+local function vertices(q,material)
+	if q[9] and material.modelFaces then
+		local face=material.modelFaces[q[9]] local points,uv={},{}
+		for i,p in ipairs(face.points) do points[i]=(Vector3.new(table.unpack(p))+Vector3.new(q[3],q[4],q[5]))*SCALE uv[i]=Vector2.new(table.unpack(face.uv[i])) end
+		return points,uv
+	end
 	local axis = q[1] + 1
 	local u, v = axis % 3 + 1, (axis + 1) % 3 + 1
 	local base = { q[3], q[4], q[5] }
@@ -33,7 +39,7 @@ local function vertices(q)
 end
 function Renderer:partition(partition)
 	local previous = self.parts[partition.key]
-	if previous and previous.revision >= partition.revision then return end
+	if previous and previous.revision >= partition.revision and (not previous.degraded or os.clock()<previous.retryAt) then return end
 	local group = Instance.new("Folder") group.Name = partition.key
 	local palette = {}
 	for _, p in ipairs(partition.palette) do palette[p.state] = p end
@@ -42,22 +48,29 @@ function Renderer:partition(partition)
 	for _, q in ipairs(partition.quads) do
 		local material = palette[q[8]]
 		local image, key = Images.face(material.name, q[1], q[2], material.properties)
+		if q[9] and material.modelFaces then key=material.modelFaces[q[9]].texture image=Images.block(key) end
 		key = image and key or "substitute"
 		if not image then missing[material.name] = true end
-		if not batches[key] then batches[key] = { image = image, quads = {} } end
+		local tint=Color3.new(1,1,1)
+		if string.find(material.name,"leaves") or material.name=="fern" or material.name=="short_grass" or material.name=="grass_block" and q[1]==1 and q[2]==1 then tint=Color3.fromRGB(145,189,89) end
+		if material.name=="water" then tint=Color3.fromRGB(63,118,228) end
+		if not batches[key] then batches[key] = { image = image, key=key, tint=tint, water=material.name=="water", quads = {} } end
 		table.insert(batches[key].quads, q)
 	end
 	local missingNames = {} for name in pairs(missing) do table.insert(missingNames, name) end table.sort(missingNames)
 	group:SetAttribute("UntexturedMaterials", table.concat(missingNames, ","))
 	local meshes, rendered = {}, false
+	local started=os.clock() local buildStarted=started
+	if not self.meshAvailable and os.clock()>=(self.retryAt or 0) then self.meshAvailable=true end
 	if self.meshAvailable then
 		local ok, err = pcall(function()
 			for _, batch in pairs(batches) do
+				if os.clock()-started>.004 then task.wait() started=os.clock() end
 				local mesh = AssetService:CreateEditableMesh() assert(mesh, "EditableMesh allocation denied")
 				table.insert(meshes, mesh)
 				local low, high = Vector3.new(math.huge, math.huge, math.huge), Vector3.new(-math.huge, -math.huge, -math.huge)
 				for _, q in ipairs(batch.quads) do
-					local points, uv = vertices(q)
+					local points, uv = vertices(q,palette[q[8]])
 					local ids, uvIds = {}, {}
 					for i, p in ipairs(points) do
 						low = Vector3.new(math.min(low.X, p.X), math.min(low.Y, p.Y), math.min(low.Z, p.Z))
@@ -67,6 +80,8 @@ function Renderer:partition(partition)
 					local material = palette[q[8]]
 					local color = batch.image and Color3.new(1, 1, 1) or Color3.fromRGB(table.unpack(material.color))
 					if batch.image and (string.find(material.name, "leaves") or material.name == "grass_block" and q[1] == 1 and q[2] == 1) then color = Color3.fromRGB(145, 189, 89) end
+					if batch.image and material.name=="water" then color=Color3.fromRGB(63,118,228) end
+					if batch.image and (material.name=="fern" or material.name=="short_grass") then color=Color3.fromRGB(145,189,89) end
 					local colorId = mesh:AddColor(color, 1)
 					for _, triangle in ipairs({ {1, 2, 3}, {1, 3, 4} }) do
 						local a, b, c = triangle[1], triangle[2], triangle[3]
@@ -90,17 +105,27 @@ function Renderer:partition(partition)
 				part.Material = Enum.Material.SmoothPlastic part.Color = Color3.new(1, 1, 1)
 				part.CFrame = CFrame.new(center)
 				if batch.image then part.TextureContent = Content.fromObject(batch.image) end
+				if Images.alpha[batch.key] then
+					local appearance=AssetService:CreateSurfaceAppearanceAsync({ColorMap=Content.fromObject(batch.image)})
+					appearance.AlphaMode=Enum.AlphaMode.Transparency appearance.ResampleMode=Enum.ResamplerMode.Pixelated appearance.Color=batch.tint appearance.Parent=part
+				end
+				if batch.water then part.Transparency=.25 end
 				part.Parent = group
 			end
 		end)
 		if ok then rendered = true else
 			for _, mesh in ipairs(meshes) do mesh:Destroy() end meshes = {}
-			self.meshAvailable = false group:ClearAllChildren() warn("Mineblox mesh fallback:", err)
+			self.meshAvailable = false self.retryAt=os.clock()+30 group:ClearAllChildren() warn("Mineblox mesh fallback:", err)
 		end
 	end
 	if not rendered then
-		-- Fallback is a Part per greedy face, never a Part per voxel.
-		for _, q in ipairs(partition.quads) do
+		-- Allocation failure must not expand into thousands of face Parts.
+		-- A visibly incomplete, labelled preview is preferable to freezing input.
+		group:SetAttribute("DegradedPreview",true)
+		group:SetAttribute("OmittedPreviewFaces",math.max(0,#partition.quads-16))
+		for index, q in ipairs(partition.quads) do
+			if index>16 then break end
+			if q[6]<=0 or q[7]<=0 then continue end
 			local axis = q[1] + 1 local u, v = axis % 3 + 1, (axis + 1) % 3 + 1
 			local size, p = { 0.025, 0.025, 0.025 }, { q[3], q[4], q[5] }
 			size[u], size[v] = q[6] * SCALE, q[7] * SCALE p[u] += q[6] / 2 p[v] += q[7] / 2
@@ -110,7 +135,16 @@ function Renderer:partition(partition)
 		end
 	end
 	if previous then destroy(previous) end
-	group.Parent = self.root self.parts[partition.key] = { group = group, revision = partition.revision, meshes = meshes }
+	group.Parent = self.root self.parts[partition.key] = { group = group, revision = partition.revision, meshes = meshes, degraded=not rendered, retryAt=os.clock()+30, center=(Vector3.new(table.unpack(partition.origin))+Vector3.new(4,4,4))*SCALE,triangles=rendered and #partition.quads*2 or #group:GetChildren()*12,buildMs=(os.clock()-buildStarted)*1000 }
+end
+function Renderer:visibility(camera)
+	local visible,triangles=0,0
+	for _,entry in pairs(self.parts) do
+		local show=self.disableCulling or Visibility.visible(camera,entry.center,math.sqrt(3)*16,192)
+		entry.group.Parent=show and self.root or nil
+		if show then visible+=1 triangles+=entry.triangles end
+	end
+	self.visible=visible self.triangles=triangles
 end
 function Renderer:apply(world)
 	if self.epoch ~= world.epoch then self:clear() self.epoch = world.epoch end

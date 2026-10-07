@@ -1,14 +1,41 @@
-import { mkdir, writeFile, readFile } from 'node:fs/promises';
+import { mkdir, writeFile, readFile, readdir } from 'node:fs/promises';
 import { execFileSync } from 'node:child_process';
 import path from 'node:path';
 import { access } from 'node:fs/promises';
+import { randomUUID } from 'node:crypto';
 
 export async function buildPlace({ url, token }) {
+  const generation = randomUUID();
   const root = path.resolve('.local/roblox');
   await mkdir(root, { recursive: true });
+  let audio = JSON.parse(await readFile('roblox/audio-defaults.json', 'utf8'));
+  try {
+    audio = JSON.parse(await readFile('.local/audio.json', 'utf8'));
+  } catch (error) {
+    if (error.code !== 'ENOENT') throw error;
+  }
+  if (
+    !audio.sounds ||
+    typeof audio.sounds !== 'object' ||
+    !Array.isArray(audio.music) ||
+    audio.music.length > 32 ||
+    Object.keys(audio.sounds).length > 32 ||
+    [...Object.values(audio.sounds), ...audio.music].some(
+      (id) => typeof id !== 'string' || !/^rbxassetid:\/\/\d{1,20}$/.test(id),
+    )
+  )
+    throw new Error('Audio config requires permitted Roblox audio asset IDs');
+  await writeFile(
+    path.join(root, 'AudioConfig.luau'),
+    `return game:GetService("HttpService"):JSONDecode(${JSON.stringify(JSON.stringify(audio))})\n`,
+  );
   await writeFile(
     path.join(root, 'DevelopmentConfig.luau'),
-    `-- Private local development configuration. Never publish this place with this token.\nreturn { url = ${JSON.stringify(url)}, token = ${JSON.stringify(token)} }\n`,
+    `-- Private local development configuration. Never publish this place with this token.\nreturn { url = ${JSON.stringify(url)}, token = ${JSON.stringify(token)}, generation = ${JSON.stringify(generation)} }\n`,
+  );
+  await writeFile(
+    path.join(root, 'generation.json'),
+    JSON.stringify({ generation }),
   );
   const source = (filename) => ({ $path: path.resolve('roblox', filename) });
   let developmentAssets = {};
@@ -17,6 +44,11 @@ export async function buildPlace({ url, token }) {
     developmentAssets = {
       DevelopmentAssets: { $path: path.join(root, 'DevelopmentAssets.luau') },
     };
+    for (const file of await readdir(root))
+      if (/^AssetPixels\d+\.luau$/.test(file))
+        developmentAssets[file.replace('.luau', '')] = {
+          $path: path.join(root, file),
+        };
   } catch {
     /* Substitute colors remain available. */
   }
@@ -54,6 +86,17 @@ export async function buildPlace({ url, token }) {
           $className: 'Folder',
           Renderer: source('Renderer.luau'),
           Images: source('Images.luau'),
+          ItemVisual: source('ItemVisual.luau'),
+          EntityVisual: source('EntityVisual.luau'),
+          AudioConfig: { $path: path.join(root, 'AudioConfig.luau') },
+          Font: source('Font.luau'),
+          World: source('World.luau'),
+          Prediction: source('Prediction.luau'),
+          Interface: source('Interface.luau'),
+          Visibility: source('Visibility.luau'),
+          Sounds: source('Sounds.luau'),
+          Sky: source('Sky.luau'),
+          Interpolation: source('Interpolation.luau'),
           ...developmentAssets,
           Hud: source('Hud.luau'),
         },

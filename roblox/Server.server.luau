@@ -19,6 +19,19 @@ local function remote(name)
 end
 local input, state, terrain, status = remote("Input"), remote("State"), remote("Terrain"), remote("Status")
 local terrainAck = remote("TerrainAck")
+local action = remote("Action")
+local actionRate={}
+action.OnServerEvent:Connect(function(player,request)
+	local b=actionRate[player] or {time=os.clock(),tokens=6} actionRate[player]=b
+	b.tokens=math.min(6,b.tokens+(os.clock()-b.time)*4) b.time=os.clock()
+	if b.tokens<1 then return end b.tokens-=1
+	if type(request)~="table" then return end
+	-- Published cross-platform chat requires filtering. This launcher is Studio-only.
+	if request.kind=="chat" and not RunService:IsStudio() then
+		status:FireClient(player,"External chat is unavailable in published servers until account linking/filtering is configured") return
+	end
+	bridge:setAction(player,request)
+end)
 local joining, rate = {}, {}
 local function join(player)
 	if joining[player] or bridge.sessions[player.UserId] then return end
@@ -32,6 +45,7 @@ Players.PlayerAdded:Connect(function(player) task.spawn(join, player) end)
 for _, player in ipairs(Players:GetPlayers()) do task.spawn(join, player) end
 Players.PlayerRemoving:Connect(function(player)
 	rate[player] = nil
+	actionRate[player]=nil
 	task.spawn(function() pcall(bridge.leave, bridge, player) end)
 end)
 input.OnServerEvent:Connect(function(player, frame)
@@ -50,7 +64,7 @@ terrainAck.OnServerEvent:Connect(function(player, epoch, known)
 	local validated = {}
 	for key, revision in pairs(known) do
 		count += 1
-		if count > 75 or type(key) ~= "string" or #key > 32 or not string.match(key, "^%-?%d+,%-?%d+,%-?%d+$") or type(revision) ~= "number" or revision % 1 ~= 0 or revision < 0 or revision > 4294967295 then return end
+		if count > 243 or type(key) ~= "string" or #key > 32 or not string.match(key, "^%-?%d+,%-?%d+,%-?%d+$") or type(revision) ~= "number" or revision % 1 ~= 0 or revision < 0 or revision > 4294967295 then return end
 		validated[key] = revision
 	end
 	session.known = validated
@@ -66,13 +80,19 @@ task.spawn(function()
 					local session = bridge.sessions[player.UserId]
 					if session and session.id == snapshot.id then
 						if snapshot.error then
-							status:FireClient(player, "Bridge: " .. snapshot.error)
+							status:FireClient(player, {connected=false,text="Minecraft session ended. Reconnecting..."})
 							if snapshot.status == 404 then bridge.sessions[player.UserId] = nil end
-						else snapshot.roundTripMs = (os.clock() - started) * 1000 state:FireClient(player, snapshot) end
+						else
+							if not RunService:IsStudio() then local filtered={} for _,e in ipairs(snapshot.events or {}) do if e.kind~="chat" then table.insert(filtered,e) end end snapshot.events=filtered end
+							snapshot.roundTripMs = (os.clock() - started) * 1000 state:FireClient(player, snapshot)
+						end
 					end
 				end
 			end
-		else warn("Mineblox exchange:", result) end
+		else
+			if not bridge.notifiedOffline then for _,player in ipairs(Players:GetPlayers()) do status:FireClient(player,{connected=false,text="Minecraft disconnected. Waiting to reconnect..."}) end bridge.notifiedOffline=true end
+		end
+		if ok and not result.offline and #result.states>0 and bridge.notifiedOffline then bridge.notifiedOffline=false end
 		task.wait(math.max(0.2 - (os.clock() - started), 0.01))
 	end
 end)
@@ -85,7 +105,7 @@ task.spawn(function()
 				local player = Players:GetPlayerByUserId(delivery.userId)
 				if player then terrain:FireClient(player, delivery.world) end
 			end
-		else warn("Mineblox terrain:", deliveries) end
+		else if os.clock()-(bridge.lastTerrainWarning or -math.huge)>5 then bridge.lastTerrainWarning=os.clock() warn("Mineblox terrain:", deliveries) end end
 		task.wait(math.max(0.5 - (os.clock() - started), 0.01))
 	end
 end)
