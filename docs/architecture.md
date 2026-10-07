@@ -10,9 +10,9 @@ flowchart LR
   Assets[Optional mcasset.cloud or local assets] -->|Development cache/import only| Renderer[Future Roblox render assets]
 ```
 
-The first four arrows are the intended architecture; only gateway, headless
-sessions and Minecraft protocol are validated locally today. Luau external
-transport is experimental. Minecraft is the only gameplay authority.
+Gateway, headless sessions, Minecraft protocol and the local Roblox Studio
+frontend have been validated together. Studio uses authenticated loopback HTTP;
+published deployment still requires HTTPS. Minecraft is the only gameplay authority.
 
 ## Ownership and boundaries
 
@@ -27,7 +27,8 @@ not applied or acknowledged by Minecraft.
 The world model stores version-local state IDs in bounded regions. The render
 model holds merged quads and later non-cube geometry. Input control and gameplay
 authority do not depend on the mesher. Snapshot/delta modules are pure and tested;
-continuous world synchronization is not wired to the HTTP API yet.
+continuous bounded terrain streaming is wired to a separate HTTP endpoint and
+worker. Mineflayer keeps the canonical decoded voxel world separately from meshes.
 
 ## Transport and prioritization
 
@@ -35,9 +36,9 @@ Minecraft uses ordinary TCP. Published Roblox server scripts use HTTPS with
 batched gameplay request/response exchanges (initial 5 Hz). No custom UDP is
 needed yet. Roblox remotes form the frontend/server boundary. Production terrain
 must use an independently budgeted endpoint and worker queue, never a giant
-payload in /v1/exchange. The initial gateway does not perform terrain work in
-request handlers, so that failure mode is avoided by scope rather than a
-production scheduling implementation.
+payload in /v1/exchange. A bounded worker performs meshing; the gateway samples
+small loaded partitions and maintains revision/cache metadata. Gameplay and
+terrain have independent in-flight work and shared platform request limits.
 
 Planned traffic classes: P0 held input/corrections, P1 combat/discrete events,
 P2 nearby entities, P3 block deltas, P4 terrain, P5 background detail. Reserved
@@ -55,10 +56,12 @@ Bound delta journals and fall back to a snapshot when history is missing. Intere
 regions follow world movement, while camera frustum/culling stays client-local.
 Reconnect starts a new session/epoch, not continuation of an old input sequence.
 
-Roblox predicts own input immediately, smooths small errors, snaps teleports/large
-errors and reconciles against server observations. Interpolate remote entity
-buffers by timestamp/sequence; keep damage/removal/death discrete. No such
-presentation layer is shipped yet.
+The shipped camera responds to look input immediately. Position presentation
+extrapolates Mineflayer's velocity for at most 200 ms, smooths small errors and
+snaps corrections/large errors. It freezes extrapolation on loss; it does not
+implement independent authoritative gameplay physics. Remote entities are
+interpolated simple visual models. Full timestamped entity buffers, equipment,
+skins, damage/removal/death event journals and input replay remain future work.
 
 ## Lifecycle and scalability
 

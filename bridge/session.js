@@ -38,6 +38,7 @@ export class VirtualPlayer extends EventEmitter {
     this.tokenTime = this.createdAt;
     this.lastCorrection = null;
     this.correctionRevision = 0;
+    this.worldEpoch = 0;
     this.log = log;
     this.bot = createBot({
       ...minecraft,
@@ -48,6 +49,7 @@ export class VirtualPlayer extends EventEmitter {
     this.bot.on('spawn', () => {
       if (this.status === 'closed') return;
       this.status = 'ready';
+      this.worldEpoch++;
       this.log({
         event: 'player_spawn',
         session: this.id,
@@ -142,6 +144,7 @@ export class VirtualPlayer extends EventEmitter {
       this.close('look error');
     });
     this.seq = frame.seq;
+    if (frame.slot !== undefined) this.bot.setQuickBarSlot(frame.slot);
     this.lastInput = started;
     this.lastActivity = started;
     this.controlsActive = frame.controls !== 0;
@@ -176,6 +179,37 @@ export class VirtualPlayer extends EventEmitter {
       correction: this.lastCorrection,
       health: this.bot.health ?? null,
       hunger: this.bot.food ?? null,
+      timeOfDay: this.bot.time?.timeOfDay ?? null,
+      selectedSlot: this.bot.quickBarSlot ?? 0,
+      worldEpoch: this.worldEpoch,
+      velocity: this.bot.entity?.velocity
+        ? {
+            x: this.bot.entity.velocity.x,
+            y: this.bot.entity.velocity.y,
+            z: this.bot.entity.velocity.z,
+          }
+        : { x: 0, y: 0, z: 0 },
+      experience: this.bot.experience ?? { level: 0, progress: 0 },
+      hotbar: Array.from({ length: 9 }, (_, i) => {
+        const item = this.bot.inventory?.slots[36 + i];
+        return item ? { name: item.name, count: item.count } : null;
+      }),
+      entities: Object.values(this.bot.entities ?? {})
+        .filter(
+          (e) =>
+            e.id !== this.bot.entity?.id &&
+            e.position &&
+            e.position.distanceTo(this.bot.entity.position) <= 48,
+        )
+        .slice(0, 128)
+        .map((e) => ({
+          id: e.id,
+          type: e.type,
+          name: e.username ?? e.name ?? 'entity',
+          position: { x: e.position.x, y: e.position.y, z: e.position.z },
+          yaw: e.yaw ?? 0,
+          pitch: e.pitch ?? 0,
+        })),
       dimension: this.bot.game?.dimension ?? null,
     };
   }

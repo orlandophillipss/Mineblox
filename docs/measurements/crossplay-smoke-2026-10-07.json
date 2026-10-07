@@ -1,0 +1,25 @@
+{
+  "date": "2026-10-07T18:22:40.139Z",
+  "minecraftVersion": "1.21.4",
+  "observedPlayer": "RB1083424714",
+  "firstObservedMovementMs": 105.68689999999992,
+  "nativeObserved": {
+    "x": 108.99878736064736,
+    "y": 143,
+    "z": -44.676552205118206
+  },
+  "robloxDisplayed": {
+    "x": 108.99878692626953,
+    "y": 142.9999542236328,
+    "z": -44.676856994628906
+  },
+  "settledPositionErrorBlocks": 0.0003082082255713917,
+  "distanceMovedBlocks": 8.482751756141782,
+  "hud": true,
+  "health": 20,
+  "hunger": 20,
+  "terrainPartitions": 54,
+  "meshParts": 194,
+  "texturedMeshParts": 149,
+  "note": "Real Roblox Studio keyboard input and a separate Minecraft protocol observer; one sample, not zero-latency parity or a native GUI client test."
+}

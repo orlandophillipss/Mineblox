@@ -43,6 +43,18 @@ strips, biome color maps and custom resource-pack namespaces need a later slice.
 The provider intentionally supports only minecraft models/blockstates/textures
 paths, not arbitrary remote URLs or Minecraft gameplay data.
 
+## Private Studio development pixels
+
+`Mineblox.bat -MinecraftAssets` prepares the pinned real Minecraft texture/HUD
+set. PNGJS decodes only images with bounded dimensions, checked before decode.
+`DevelopmentAssets.luau` is generated under ignored `.local/roblox` and embedded
+only in the private generated place. The client creates EditableImages from RGBA
+pixels; block meshes use TextureContent and HUD labels use ImageContent. Nothing
+is uploaded to Roblox. The visible generated forest's common block materials
+and actual hearts, hunger, hotbar, selection, crosshair and experience sprites
+have been tested locally. The catalogue is not a complete Minecraft asset/model
+implementation. Missing optional assets retain explicit substitute-color diagnostics.
+
 ## Rights and Roblox import
 
 mcasset.cloud's site source is MIT, while its

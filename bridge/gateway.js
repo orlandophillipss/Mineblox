@@ -3,6 +3,7 @@ import { timingSafeEqual } from 'node:crypto';
 import { performance } from 'node:perf_hooks';
 import { BridgeError, PROTOCOL_VERSION, minecraftName } from './input.js';
 import { VirtualPlayer } from './session.js';
+import { TerrainService } from './terrain.js';
 
 export function createGateway({
   token,
@@ -23,6 +24,8 @@ export function createGateway({
   if (!['127.0.0.1', '::1', 'localhost'].includes(minecraft.host))
     throw new Error('Offline development Minecraft target must be loopback');
   const sessions = new Map();
+  const terrain = new TerrainService();
+  let terrainBusy = false;
   const identities = new Set();
   let shuttingDown = false;
   // One authenticated Roblox server per gateway in v1. Fixed window bounds the
@@ -58,6 +61,35 @@ export function createGateway({
       if (['POST', 'PUT'].includes(req.method)) body = await readJson(req);
       if (body && body.version !== PROTOCOL_VERSION)
         throw new BridgeError('Unsupported protocol version', 426);
+      if (req.url === '/v1/terrain' && req.method === 'POST') {
+        if (
+          Object.keys(body).some((k) => !['version', 'players'].includes(k)) ||
+          !Array.isArray(body.players) ||
+          body.players.length > 4
+        )
+          throw new BridgeError('Invalid terrain batch');
+        if (terrainBusy) throw new BridgeError('Terrain exchange is busy', 429);
+        terrainBusy = true;
+        try {
+          const worlds = [];
+          for (const request of body.players) {
+            if (
+              !request ||
+              Object.keys(request).some(
+                (k) => !['id', 'known', 'epoch'].includes(k),
+              )
+            )
+              throw new BridgeError('Invalid terrain player');
+            const player = sessions.get(request.id);
+            if (!player) throw new BridgeError('Unknown session', 404);
+            worlds.push(await terrain.stream(player, request));
+          }
+          respond(200, { version: 1, worlds });
+        } finally {
+          terrainBusy = false;
+        }
+        return;
+      }
       if (req.url === '/v1/sessions' && req.method === 'POST') {
         minecraftName(body.robloxId);
         if (Object.keys(body).some((k) => !['version', 'robloxId'].includes(k)))
@@ -155,6 +187,7 @@ export function createGateway({
       shuttingDown = true;
       clearInterval(maintenance);
       for (const player of sessions.values()) player.close('gateway shutdown');
+      await terrain.close();
       if (server.listening)
         await new Promise((resolve) => server.close(resolve));
     },

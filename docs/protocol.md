@@ -9,14 +9,15 @@ spike; terrain is not embedded in gameplay exchanges.
 
 ## Endpoints
 
-| Method/path                   | Request                                                         | Response                                                    |
-| ----------------------------- | --------------------------------------------------------------- | ----------------------------------------------------------- |
-| GET `/health`                 | authenticated                                                   | protocol version and current session count                  |
-| POST `/v1/sessions`           | `{ "version": 1, "robloxId": "123" }`                           | 201 session state after spawn; 15 s timeout                 |
-| PUT `/v1/sessions/<id>/input` | input frame below                                               | state plus acceptedSeq/processingMs                         |
-| POST `/v1/exchange`           | `{ "version": 1, "inputs": [{ "id": "...", "frame": {...} }] }` | version and states array, per-entry error/status on failure |
-| GET `/v1/sessions/<id>/state` | authenticated                                                   | current state; reading does not renew the session lease     |
-| DELETE `/v1/sessions/<id>`    | authenticated                                                   | `{ "closed": true }`                                        |
+| Method/path                   | Request                                                                             | Response                                                    |
+| ----------------------------- | ----------------------------------------------------------------------------------- | ----------------------------------------------------------- |
+| GET `/health`                 | authenticated                                                                       | protocol version and current session count                  |
+| POST `/v1/sessions`           | `{ "version": 1, "robloxId": "123" }`                                               | 201 session state after spawn; 15 s timeout                 |
+| PUT `/v1/sessions/<id>/input` | input frame below                                                                   | state plus acceptedSeq/processingMs                         |
+| POST `/v1/exchange`           | `{ "version": 1, "inputs": [{ "id": "...", "frame": {...} }] }`                     | version and states array, per-entry error/status on failure |
+| POST `/v1/terrain`            | `{ "version": 1, "players": [{ "id": "...", "epoch": 1, "known": {"x,y,z": 4} }] }` | separate world/partition snapshots, max four players        |
+| GET `/v1/sessions/<id>/state` | authenticated                                                                       | current state; reading does not renew the session lease     |
+| DELETE `/v1/sessions/<id>`    | authenticated                                                                       | `{ "closed": true }`                                        |
 
 Requests are limited to 16 KiB; maximum 16 sessions/batch entries by default.
 Each player has a 20-token input bucket replenished at 20 frames/second; floods
@@ -39,6 +40,8 @@ frames supersede older frames. Controls is a seven-bit mask: forward, back, left
 right, jump, sprint, sneak in bits 0..6. No movement destination is accepted.
 Yaw is [-pi,pi], pitch [-pi/2,pi/2], both Mineflayer radians. Yaw 0 points -Z,
 positive yaw points toward -X; positive pitch looks up.
+Optional `slot` is an integer 0..8 and selects Minecraft's held hotbar slot.
+It never supplies inventory contents.
 
 acceptedSeq acknowledges bridge validation/application to the virtual client's
 controls. It does **not** acknowledge Minecraft simulation or an accepted
@@ -59,8 +62,36 @@ close after 30 seconds of inactivity. The CLI's leases differ for manual use.
 HTTP exchange is shared/batched at 5 Hz for an entire Roblox server (300 requests/
 minute), not 5 Hz per player. Never issue catch-up bursts. Back off on unavailable
 gateway/Minecraft, renew via new input, and stop prediction if disconnected.
-Production event sequencing, tick IDs, terrain endpoints, session ownership,
-resume, world epochs and dimension resets are not implemented in v1.
+The server generates fresh delivery sequences at each exchange and stops controls
+when Roblox client input is absent for 750 ms. Client input sequence checks are
+separate from bridge delivery sequence checks. Camera/look input is local at render
+rate; Roblox intention frames are sent at 20 Hz and gateway batches at 5 Hz.
+State also includes velocity (blocks/tick), worldEpoch, nearby entities (max 128,
+within 48 blocks), server health/food, hotbar, held slot and experience.
+
+## Terrain streaming envelope
+
+Terrain has its own 2 Hz budget and worker, separate from gameplay. Interest follows
+the Minecraft player's position, never camera movement: 75 partitions of 8^3
+voxels, nearest first. The cache is per session/world epoch and bounded to active
+interest. A session is bound to one Minecraft server and its current dimension.
+Each response carries version, session id, epoch, dimension, active keys and up
+to four full partition meshes per player. Quad arrays are
+`[axis, sign, x, y, z, width, height, stateId]`, with a material palette.
+
+`known` is a dictionary of successfully rendered revisions, not an acknowledgement
+of merely receiving a response. Omit it when empty: Roblox JSONEncode encodes an
+empty table as an array. Client render acknowledgements update the trusted server's
+revision dictionary. Lost/failed/dropped render work is resent as a snapshot;
+leaving interest evicts a partition. Spawn/respawn/dimension changes increment the
+epoch. Clients discard old session/epoch deliveries. Block edits invalidate the
+affected partition and boundary neighbors. Chunk load/unload invalidates nearby
+partitions. Mesh jobs invalidated during work are discarded. Meshes cap at 4,096
+quads per partition; a full model/delta journal is future work.
+
+Production event sequencing, tick IDs, multi-server ownership and resume remain
+unfinished. Full Minecraft blockstate variants, multipart visuals and fluid
+surfaces are not covered by collision-shape fallback geometry.
 
 ## Binary voxel experiment
 

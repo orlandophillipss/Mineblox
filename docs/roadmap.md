@@ -2,10 +2,10 @@
 
 ## Current milestone
 
-M1/M2: protocol-level virtual player, bounded held-input control and independent
-observer proof. M3 groundwork: decoded chunk extraction to a bounded voxel
-snapshot, revision invariants and independent cube meshing. This initial run
-ships a reproducible prototype, not complete Minecraft/Roblox crossplay.
+M1/M2: protocol player and observer proof. M3/M4: bounded terrain streaming,
+fixed-size EditableMesh rendering, private real Minecraft textures/HUD and local
+Studio cross-client movement. This is a working local frontend prototype, not
+complete Minecraft client parity or published crossplay.
 
 ## Implemented
 
@@ -17,23 +17,24 @@ ships a reproducible prototype, not complete Minecraft/Roblox crossplay.
 - Bounded voxel snapshot codec/deltas, cube greedy mesher and invariant/fuzz-style tests.
 - Optional cached mcasset.cloud/local asset provider with integrity/model parent handling.
 - Repeatable benchmarks, formatting/lint/build/unit/integration CI.
+- One-file Windows bootstrap/launcher, vanilla normal-world generation and official Studio MCP automation.
+- Separate terrain worker/cache, render acknowledgements, eviction and dimension/session reset handling.
+- Real HUD sprites, server-backed health/food/experience/hotbar and simple entity interpolation.
+- Roblox keyboard movement observed by a separate Minecraft protocol client with settled coordinate comparison.
 
 Exact executed live validation and measurements are in benchmarks.md.
 
 ## Experimental
 
-Server-only Roblox HTTPS transport module, primitive opaque-cube world preview,
-raw u32 voxel wire encoding. No Studio execution, Roblox mesh upload, graphical
-client inspection or production latency/scaling claim is attached to these.
+Published HTTPS transport, full blockstate/models, remote entity visuals and raw
+u32 voxel wire encoding remain experimental. Local Studio screenshots and a
+Minecraft observer test are available; no production latency/scaling claim applies.
 
 ## Next three concrete tasks
 
-1. Studio HTTPS transport test: shared request budget, p50/p95 RTT and reconnect
-   failure behavior; confirm secrets/config/runtime platform constraints.
-2. EditableMesh renderer slice: one bounded voxel region, non-proprietary textures,
-   safe partitioning, winding/UVs, client memory and culling measurements.
-3. Local prediction/reconciliation + interpolated Minecraft player entities,
-   tested with a native graphical Minecraft client and explicit world epochs.
+1. Full blockstate/multipart/plant/fluid visuals, rotated textures and biome/light handling.
+2. Latency distributions, frame-time measurements, repeated streaming and device/load tests.
+3. Authoritative block interactions and inventory transactions, verified with a native graphical client.
 
 ## Following vertical slices
 
@@ -44,9 +45,9 @@ complex End entities -> cooperative Ender Dragon benchmark.
 
 ## Current blockers and deliberate omissions
 
-Roblox Studio/published test experience and reachable authenticated HTTPS gateway
-are required for frontend proof. No online-mode Minecraft identity linking,
+Published Roblox deployment requires a reachable authenticated HTTPS gateway.
+No online-mode Minecraft identity linking,
 Microsoft credentials, multi-game-server isolation or production asset rights
 resolution is provided. Go gateway adoption waits for measured need. Continuous
-world cache, entity transport, block actions, combat, inventory and frontend
-prediction are not implemented yet. Minecraft remains their future authority.
+shared production world cache, event journals, block actions, combat and inventory
+transactions remain unfinished. Minecraft remains their authority.

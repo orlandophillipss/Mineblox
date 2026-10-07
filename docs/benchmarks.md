@@ -1,5 +1,42 @@
 # Validation and benchmark baseline — 2026-10-06
 
+## Local Studio validation — 2026-10-07
+
+The Windows batch launcher successfully restored dependencies, started the real
+vanilla normal-world server and loopback bridge, built a private place, opened
+the repaired Studio installation and started Play using the official MCP.
+Real Minecraft HUD sprites and textured terrain were inspected in the viewport.
+Resizable meshes exceeded the client memory budget; fixed-size mesh batches
+resolved that failure in the tested forest. The inspected scene streamed all
+75 interest partitions. Missing visible dark-oak/mushroom textures were added;
+the final material diagnostic returned no substitute materials in that forest.
+
+The [crossplay record](measurements/crossplay-smoke-2026-10-07.json) uses actual
+Roblox keyboard input, forwarded through the server and gateway, plus a separate
+Minecraft protocol observer. It moved 8.48 blocks, first observed movement after
+105.69 ms, and measured 0.000308 blocks settled position difference. This is one
+local sample, not a p95 latency measurement, native GUI comparison, or zero-latency
+claim. Render inspection at that point found 194 MeshParts, 149 textured before
+the additional forest material set, and a real HUD with server health/hunger 20.
+
+The [final check](measurements/crossplay-final-2026-10-07.json), after correcting
+mesh object-space placement, moved 8.21 blocks with first observation at 265.19 ms
+and settled error 0.000469 blocks. All 300 inspected MeshParts had textures.
+These two isolated runs demonstrate scheduling variation; neither establishes
+a latency distribution. The final viewport showed the real forest and HUD.
+
+The [terrain stream record](measurements/terrain-stream-2026-10-07.json) sampled
+75 real 8^3 partitions in 19 calls: 8,386 quads and 287,575 JSON bytes total.
+Extraction + worker mesh + JSON serialization measured p50 2.93 ms and p95
+32.56 ms per call, including the cold worker startup sample. These values are
+local work timings, not Roblox HTTP RTT or client frame times. The worker keeps
+mesh construction off the gameplay event loop; bounded sampling still runs there.
+
+23 unit tests, the real TCP integration fixture, JavaScript checks, Luau source
+compilation and live Minecraft/Studio checks are the current validation set.
+No server TPS, Roblox FPS, mobile-device, public HTTPS or multi-session scaling
+claim is attached to this local prototype.
+
 These measurements were actually executed on Windows x64, Node v24.16.0,
 AMD Ryzen 7 9800X3D. They are local prototype results, not crossplay performance
 claims. Raw records: [microbenchmarks](measurements/microbenchmarks.json) and

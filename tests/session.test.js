@@ -35,6 +35,9 @@ test('intent frames cannot inject positions, gameplay outcomes, or incompatible 
     { controls: 128 },
     { yaw: NaN },
     { pitch: Math.PI },
+    { slot: -1 },
+    { slot: 9 },
+    { slot: NaN },
   ])
     assert.throws(() => validateInput({ ...frame, ...change }));
   for (const id of ['0', '../evil', 'abc', '123456789012345', 123])
@@ -61,6 +64,15 @@ test('control input, accepted sequence, and server correction stay separate', ()
   assert.equal(player.snapshot().correction.position.x, 1);
   bot._client.state = 'configuration';
   assert.throws(() => player.apply({ ...frame, seq: 2 }), /reconfiguring/);
+  player.close();
+});
+
+test('hotbar selection changes only the held slot and is reflected in Minecraft state', () => {
+  const { bot, player } = setup();
+  player.apply({ ...frame, slot: 8 });
+  assert.equal(bot.quickBarSlot, 8);
+  assert.equal(player.snapshot().selectedSlot, 8);
+  assert.equal(player.snapshot().hotbar.length, 9);
   player.close();
 });
 

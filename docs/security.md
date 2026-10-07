@@ -7,6 +7,11 @@ Roblox server owns the engine-verified user identity; gateway does not authentic
 Roblox users independently. Do not expose this as a public multi-tenant service.
 
 Controls are bounded full intentions, never destinations or gameplay outcomes.
+Local launcher secrets are regenerated each launch and embedded exclusively in
+ServerScriptService's private development config. They are never sent through
+client remotes or logged. Studio-only HTTP/string-secret exceptions are rejected
+by published game transport. Terrain acknowledgements affect rendering only;
+they cannot alter Minecraft world state. Input and ack tables have bounded fields.
 Version/sequence/control mask/look bounds, body/session/request caps, duplicate
 identity reservation, input expiry and disconnect cleanup are implemented and
 tested. Production needs per-game-server ownership, per-user action quotas,

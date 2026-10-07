@@ -2,14 +2,14 @@
 
 An experimental bridge that lets Roblox frontends control **real Minecraft Java
 protocol players** in an authoritative Minecraft world. Native Minecraft users
-connect normally. Minecraft owns game rules; Roblox will provide input, rendering,
-prediction and UI. This is an independent open-source project, unaffiliated with
+connect normally. Minecraft owns game rules; Roblox provides input, rendering,
+movement presentation and UI. This is an independent open-source project, unaffiliated with
 Mojang, Microsoft or Roblox.
 
 ```mermaid
 flowchart LR
   RobloxClient -->|Roblox remotes| RobloxServer
-  RobloxServer -->|Batched HTTPS| Mineblox
+  RobloxServer -->|Batched HTTP in local Studio / HTTPS for deployment| Mineblox
   Mineblox <-->|One Java protocol session per user| MinecraftServer
   MinecraftClient <-->|Normal connection| MinecraftServer
 ```
@@ -23,10 +23,45 @@ cleanup. Chunk extraction, binary snapshots, revision-safe deltas and independen
 cube greedy meshing are tested. There is an optional mcasset.cloud/local asset
 cache. See [validation and measured results](docs/benchmarks.md).
 
-The Roblox transport module is experimental and has not been run in Studio.
-There is **no complete Roblox renderer or playable crossplay experience yet**.
-Combat, block actions, inventory, continuous terrain/entity replication, online
-authentication, client prediction and reconciliation remain planned.
+The local Studio frontend now runs against a real vanilla server. It streams
+8^3 terrain partitions, renders fixed-size EditableMeshes with block-scale UVs,
+displays real Minecraft HUD sprites through private EditableImages, and forwards
+keyboard/look intentions to the Minecraft player. Health, hunger, experience,
+hotbar contents and nearby entity positions come from Minecraft. The default
+server uses vanilla terrain generation, seed 12345 and survival mode; the older
+flat test world is preserved separately.
+
+The final Studio/Minecraft observer test measured a settled position difference
+of 0.00047 blocks after moving 8.21 blocks. This is one local sample, not a claim
+of zero latency or full Minecraft client parity. Complex block models, fluids,
+block actions, combat/inventory interactions, online authentication and published
+Roblox deployment remain unfinished.
+
+## One-file Windows launch
+
+Double-click **Mineblox.bat**. It installs missing Node/Java and portable Roblox
+build tools, restores pinned dependencies, starts Minecraft and the loopback
+bridge, builds the private place and opens Studio. With Studio's MCP enabled,
+Play starts automatically. Keep the launcher window open; Ctrl+C stops services.
+Roblox Studio must be installed and signed in. Enable **Studio as an MCP server**
+in Assistant → … → Manage MCP Servers once. The official Studio MCP is used;
+no third-party Studio plugin is required.
+
+For the real Minecraft texture/HUD development set on a fresh checkout, run:
+
+```bat
+Mineblox.bat -MinecraftAssets
+```
+
+Subsequent double-click launches reuse the private cache. Alternatively set
+`MINEBLOX_ASSET_ROOT` to an extracted, user-provided Minecraft asset root. Generated
+place, secrets, downloaded assets and server binaries stay in ignored `.local`.
+Do not publish the generated development place. A new installation still needs
+explicit Minecraft EULA acceptance; existing acceptance is preserved.
+
+Controls: WASD, Space to jump, Ctrl to sprint, Shift to sneak, mouse to look,
+1–9/wheel to select the held slot, Tab to release the cursor. Native Java 1.21.4
+clients connect to **127.0.0.1:25565**.
 
 ## Local development
 
@@ -74,13 +109,13 @@ npm run dev
 Gateway defaults to 127.0.0.1:8080. Every endpoint requires bearer auth. POST
 `/v1/sessions` with `{ "version": 1, "robloxId": "123" }`; use the returned ID
 in `/v1/exchange` or `/v1/sessions/<id>/input`. Input contains only version, seq,
-controls and yaw/pitch. [Protocol reference](docs/protocol.md) describes the schema,
+controls, yaw/pitch and optional held slot. [Protocol reference](docs/protocol.md) describes the schema,
 limits and prediction/correction distinction. A bearer-authenticated Roblox
 server is trusted to establish identity; direct Roblox clients cannot hold this key.
 
-[Roblox setup](roblox/README.md) explains the shared 5 Hz HTTPS batching experiment.
-Published Roblox servers need a reachable HTTPS gateway; localhost is for local
-tools. No external hosting/tunnel is provisioned by this repository.
+[Roblox setup](roblox/README.md) explains shared 5 Hz gameplay plus 2 Hz terrain
+batching. Published Roblox servers need a reachable HTTPS gateway; the tested
+launcher uses loopback HTTP in local Studio. No external hosting is provisioned.
 
 ## Textures and models
 

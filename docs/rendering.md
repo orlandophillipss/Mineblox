@@ -18,7 +18,31 @@ Tests cover cube/adjacent/stacked blocks, large plane, hole, different materials
 transparent same/different boundaries, negative origin, neighbor boundaries and
 random worlds compared to an independent exposed-unit-face reference.
 
-## Next runtime experiment
+## Shipped local Studio renderer
+
+The terrain worker emits bounded 8^3 partition meshes. The Roblox client groups
+greedy faces by texture, creates block-scale repeated UVs and freezes completed
+EditableMeshes using CreateEditableMeshAsync with FixedSize=true. Retained dynamic
+meshes hit the client memory budget in the normally generated world; fixed-size
+meshes eliminated that observed failure. Parts and their backing meshes are
+destroyed together on replacement/eviction. Empty partitions allocate no meshes.
+Vertices are centered in mesh object space before placing the MeshPart at its
+world center; a live viewport check caught and corrected duplicated translation.
+Ambient light keeps the local preview readable at night; it is not Minecraft
+light propagation.
+
+The real development textures/HUD sprites are loaded from private pixel data
+into EditableImages; no image is uploaded to Roblox. Device allocation failure
+uses an explicitly logged greedy-face Part fallback. That path is bounded by
+partition quad limits but may be expensive and uses substitute colors.
+
+The local generated forest has been inspected with textured meshes and real HUD
+sprites. This does not cover every Minecraft material: the development catalogue
+contains common blocks, including the observed dark-oak and mushroom materials.
+Collision shapes approximate unsupported non-cube visuals; full blockstate,
+multipart, rotated-model, fluid, biome-color and lighting parity is unfinished.
+
+## Remaining runtime work
 
 Start with 16^3 voxel sections and test 8^3/16^3 mesh partitions. Rebuild only the
 changed partition and boundary neighbors. Track mesh generation and upload

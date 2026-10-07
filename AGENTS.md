@@ -37,9 +37,11 @@ by Mineflayer/PrismarineJS. Loopback-only Minecraft target is enforced in this
 development build. Online-mode identity linking is not implemented.
 
 Pure modules implement bounded voxel snapshots, revision deltas and cube greedy
-meshing. They are not a production world cache/terrain transport. An experimental
-server-side Luau transport is provided; no Roblox renderer or client prediction
-has been validated. Research/ADR describe the intended next stage.
+meshing. A separate worker streams bounded 8^3 terrain partitions to the Roblox
+frontend. Studio has validated server transport, fixed-size EditableMesh terrain,
+private EditableImage Minecraft textures/HUD, first-person movement presentation
+and remote entity interpolation. The default launcher uses authenticated loopback
+HTTP in Studio. Published servers still require HTTPS and Roblox Secret configuration.
 
 ## Repository map
 
@@ -52,7 +54,10 @@ has been validated. Research/ADR describe the intended next stage.
 - `tools/minecraft.js`: verified local server download and EULA-gated launcher.
 - `tools/bench.js`: microbenchmarks; `.local/`: ignored downloaded/cache/test outputs.
 - `tests/`: invariants; `tests/integration/`: real TCP fixture, not a vanilla simulation.
-- `roblox/`: experimental Luau transport and setup constraints.
+- `bridge/terrain.js`, `bridge/terrain-worker.js`: bounded world interest/cache and off-thread meshing.
+- `roblox/`: server transport, client camera/input, fixed-size mesh renderer, image loader and HUD.
+- `Mineblox.bat`, `tools/bootstrap.ps1`, `tools/launcher.js`: one-file local launch and dependency bootstrap.
+- `tools/studio-*.js`, `tools/mcp-proxy.js`: official Studio MCP automation; private place/config in `.local`.
 - `docs/`: research, architecture ADR, protocol, rendering, assets, benchmarks and roadmap.
 
 ## Exact development commands
@@ -122,19 +127,17 @@ round trip -> bounded chunk extraction -> optimized Roblox region -> prediction
 and reconciliation -> players/entities -> block actions -> combat/inventory ->
 multiplayer load -> dimensions/complex entities -> Ender Dragon benchmark.
 
-Current milestone: M1/M2 protocol player proof plus M3 bounded chunk conversion
-groundwork. Consult docs/roadmap.md and docs/benchmarks.md for exact validation status.
+Current milestone: M1/M2 protocol player proof plus M3/M4 local Studio terrain,
+Minecraft HUD and cross-client movement proof. Consult docs/roadmap.md and
+docs/benchmarks.md for exact validation status.
 Biggest next risk: playable latency under Roblox's external HTTP budget and
 runtime mesh/device constraints. Keep the Minecraft virtual player boundary intact.
 
 Next three tasks:
 
-1. Run the Luau transport in Studio against an HTTPS development gateway and
-   measure request/round-trip distributions under the shared HTTP budget.
-2. Build a client-local EditableMesh cube renderer with partition limits, correct
-   UVs, culling, bounded work and user-provided substitute textures.
-3. Add local movement prediction/reconciliation with dimension epochs and remote
-   entity interpolation; validate against a real native Minecraft client.
+1. Extend blockstate variants, rotated logs, multipart/plant/fluid models and biome tint.
+2. Measure input/observer latency distributions, client frame times and repeated streaming under load.
+3. Add authoritative block interactions and inventory transactions, then validate with a native graphical client.
 
 Blockers for production: online authentication/account linking, HTTPS deployment,
 Roblox runtime validation, continuous terrain/cache streaming, entity/events,

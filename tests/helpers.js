@@ -24,6 +24,10 @@ export function fakeBot() {
     bot.entity.yaw = yaw;
     bot.entity.pitch = pitch;
   };
+  bot.quickBarSlot = 0;
+  bot.setQuickBarSlot = (slot) => {
+    bot.quickBarSlot = slot;
+  };
   bot.quit = () => {
     bot.quitCount = (bot.quitCount ?? 0) + 1;
     bot.emit('end');

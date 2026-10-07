@@ -1,0 +1,28 @@
+{
+  "date": "2026-10-07T18:30:53.516Z",
+  "minecraftVersion": "1.21.4",
+  "partitionSize": 8,
+  "partitions": 75,
+  "requestCount": 19,
+  "totalQuads": 8386,
+  "totalJsonBytes": 287575,
+  "p50RequestWorkMs": 2.9318000000000666,
+  "p95RequestWorkMs": 32.56280000000004,
+  "materials": [
+    "air",
+    "birch_leaves",
+    "birch_log",
+    "coal_ore",
+    "dark_oak_leaves",
+    "dark_oak_log",
+    "dirt",
+    "grass_block",
+    "mushroom_stem",
+    "oak_leaves",
+    "oak_log",
+    "red_mushroom_block",
+    "short_grass",
+    "stone"
+  ],
+  "note": "Real vanilla normal-world partition extraction, worker meshing and JSON serialization; local sampling, not Roblox network RTT or FPS."
+}

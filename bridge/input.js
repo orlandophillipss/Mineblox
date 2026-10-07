@@ -19,7 +19,7 @@ export class BridgeError extends Error {
 export function validateInput(frame) {
   if (!frame || typeof frame !== 'object' || Array.isArray(frame))
     throw new BridgeError('Input must be an object');
-  const allowed = ['version', 'seq', 'controls', 'yaw', 'pitch'];
+  const allowed = ['version', 'seq', 'controls', 'yaw', 'pitch', 'slot'];
   if (Object.keys(frame).some((key) => !allowed.includes(key)))
     throw new BridgeError('Unknown input field');
   if (frame.version !== PROTOCOL_VERSION)
@@ -36,6 +36,11 @@ export function validateInput(frame) {
     throw new BridgeError('Yaw must be in [-pi, pi] radians');
   if (!Number.isFinite(frame.pitch) || Math.abs(frame.pitch) > Math.PI / 2)
     throw new BridgeError('Invalid pitch');
+  if (
+    frame.slot !== undefined &&
+    (!Number.isInteger(frame.slot) || frame.slot < 0 || frame.slot > 8)
+  )
+    throw new BridgeError('Invalid hotbar slot');
   return frame;
 }
 
