@@ -1,7 +1,8 @@
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
-import { readFile, readdir } from 'node:fs/promises';
+import { readFile, readdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import { selectStudio } from './studio-selection.js';
 const client = new Client({ name: 'mineblox-sync', version: '0.2.0' });
 await client.connect(
   new StdioClientTransport({
@@ -10,7 +11,30 @@ await client.connect(
   }),
 );
 try {
-  const { id } = JSON.parse(await readFile('.local/studio.json', 'utf8'));
+  let previous;
+  try {
+    previous = JSON.parse(await readFile('.local/studio.json', 'utf8')).id;
+  } catch {
+    /* First connection. */
+  }
+  const list = await client.callTool({
+    name: 'list_roblox_studios',
+    arguments: {},
+  });
+  if (list.isError) throw new Error('Studio connection inventory failed');
+  const id = selectStudio(
+    JSON.parse(list.content.find((item) => item.type === 'text').text).studios,
+    previous,
+  );
+  const stop = await client.callTool({
+    name: 'start_stop_play',
+    arguments: { studio_id: id, is_start: false },
+  });
+  if (stop.isError)
+    throw new Error(
+      'Could not stop the selected Studio playtest for script updates',
+    );
+  await writeFile('.local/studio.json', JSON.stringify({ id }));
   const scripts = [
     [
       'ServerScriptService.DevelopmentConfig',

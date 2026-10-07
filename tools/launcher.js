@@ -1,5 +1,5 @@
 import { spawn, execFileSync } from 'node:child_process';
-import { mkdir, readFile, writeFile, access } from 'node:fs/promises';
+import { mkdir, readFile, writeFile, access, rm } from 'node:fs/promises';
 import { createWriteStream } from 'node:fs';
 import { randomBytes } from 'node:crypto';
 import net from 'node:net';
@@ -8,6 +8,7 @@ import mineflayer from 'mineflayer';
 import { createGateway } from '../bridge/gateway.js';
 import { buildPlace } from './build-place.js';
 import { openStudio } from './open-studio.js';
+import { clearRequiredPorts } from './startup-processes.js';
 
 const children = [];
 let gateway,
@@ -71,10 +72,7 @@ async function shutdown(code = 0) {
 for (const signal of ['SIGINT', 'SIGTERM'])
   process.once(signal, () => void shutdown());
 try {
-  if (await portOpen(25565))
-    throw new Error(
-      'Port 25565 is already in use. Stop the other development server before launching Mineblox.',
-    );
+  await rm('.local/ready.json', { force: true });
   try {
     await access('.local/minecraft/server.jar');
   } catch {
@@ -94,12 +92,32 @@ try {
   } catch {
     /* First launch. */
   }
+  const savedPort = /^http:\/\/127\.0\.0\.1:(\d{1,5})$/.exec(
+    previous?.url ?? '',
+  );
   const reusable =
     previous &&
     /^[a-f0-9]{64}$/.test(previous.token) &&
-    /^http:\/\/127\.0\.0\.1:\d+$/.test(previous.url);
+    savedPort &&
+    Number(savedPort[1]) > 0 &&
+    Number(savedPort[1]) <= 65535 &&
+    Number(savedPort[1]) !== 25565;
   const token = reusable ? previous.token : randomBytes(32).toString('hex');
   const preferredPort = reusable ? Number(new URL(previous.url).port) : 0;
+  if (process.platform === 'win32') {
+    for (const owner of clearRequiredPorts([25565, preferredPort])) {
+      console.log(
+        `Stopped ${owner.name} (PID ${owner.pid}) using required port(s) ${owner.ports.join(', ')}.`,
+      );
+    }
+  } else if (
+    (await portOpen(25565)) ||
+    (preferredPort && (await portOpen(preferredPort)))
+  ) {
+    throw new Error(
+      'A required development port is occupied. Automatic port cleanup is supported on Windows.',
+    );
+  }
   execFileSync(process.execPath, ['tools/minecraft.js', 'configure'], {
     stdio: 'inherit',
     windowsHide: true,

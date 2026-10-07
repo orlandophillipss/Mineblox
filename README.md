@@ -43,8 +43,15 @@ Double-click **Mineblox.bat**. It installs missing Node/Java and portable Roblox
 build tools, restores pinned dependencies, starts Minecraft and the loopback
 bridge, builds the private place and opens Studio. With Studio's MCP enabled,
 Play starts automatically. The launcher reuses its managed Studio window and
-private loopback credential/port across restarts. Keep the launcher window open;
-Ctrl+C stops services. Remove ignored `.local/launcher.json` to rotate the credential
+private loopback credential/port across restarts.
+Startup stops existing TCP listeners on Minecraft port 25565 and the saved bridge
+port before starting replacements. Cleanup targets only processes listening on
+those required ports.
+An expired Studio process record is ignored; an existing window for this place
+is reused when available. A stale Studio MCP connection is refreshed before
+installing scripts and starting Play.
+Keep the launcher window open; Ctrl+C stops services. Remove ignored
+`.local/launcher.json` to rotate the credential
 after stopping the launcher.
 Roblox Studio must be installed and signed in. Enable **Studio as an MCP server**
 in Assistant → … → Manage MCP Servers once. The official Studio MCP is used;

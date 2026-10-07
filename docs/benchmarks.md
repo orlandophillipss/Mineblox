@@ -46,6 +46,15 @@ that had left the last breaking texture visible on subsequent hovered blocks.
 
 ## Local Studio validation — 2026-10-07
 
+Startup recovery was retested through `Mineblox.bat` with occupied development
+ports and a stale saved Studio PID. The launcher stopped the prior port owner,
+reused the open Studio window, refreshed its MCP connection, reached READY and
+started Play automatically. The inspected client had live Minecraft state and
+terrain; only one Studio process remained. All 40 Windows unit tests passed,
+including isolated port-owner cleanup, unrelated-listener preservation,
+self-process protection and stale process/MCP selection. Windows-only process
+checks are skipped in Linux CI; portable selection/validation checks still run.
+
 The Windows batch launcher successfully restored dependencies, started the real
 vanilla normal-world server and loopback bridge, built a private place, opened
 the repaired Studio installation and started Play using the official MCP.
