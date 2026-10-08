@@ -1,0 +1,9 @@
+{
+  "checkedAt": "2026-10-08T17:51:56.494Z",
+  "clientVersion": "1.21.4",
+  "quickPlayTarget": "127.0.0.1:25565",
+  "mode": "launcher --minecraft-client --no-studio --managed-pipe",
+  "automaticGuiJoin": true,
+  "serverStoppedAfterLauncherClose": true,
+  "ownedGuiClosedAfterLauncherStop": true
+}

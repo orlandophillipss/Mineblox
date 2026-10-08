@@ -22,6 +22,7 @@
     "assets": "node tools/assets.js",
     "minecraft:prepare": "node tools/minecraft.js prepare",
     "minecraft:start": "node tools/minecraft.js start",
+    "minecraft:client": "node tools/native-client.js --ensure-server --stay-open",
     "start": "node tools/launcher.js",
     "check:luau": "node tools/check-luau.js",
     "test:luau": "node tools/test-luau.js",

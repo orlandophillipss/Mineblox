@@ -1,0 +1,10 @@
+{
+  "checkedAt": "2026-10-08T17:50:01.505Z",
+  "clientVersion": "1.21.4",
+  "username": "MinebloxJava",
+  "quickPlayTarget": "127.0.0.1:25565",
+  "serverReused": true,
+  "clientExitCode": 0,
+  "serverPreservedAfterClientClose": true,
+  "bridgeHealthAfterClientClose": 200
+}

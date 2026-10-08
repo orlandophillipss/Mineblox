@@ -1,5 +1,6 @@
-param([switch]$MinecraftAssets, [switch]$ImportAudio)
+param([switch]$MinecraftAssets, [switch]$ImportAudio, [switch]$MinecraftClient, [switch]$ClientOnly, [string]$MinecraftName = 'MinebloxJava')
 $ErrorActionPreference = 'Stop'
+if (($MinecraftClient -or $ClientOnly) -and $MinecraftName -cnotmatch '^[A-Za-z0-9_]{3,16}$') { throw 'MinecraftName must contain 3-16 letters, numbers or underscores' }
 $workspace = Split-Path -Parent $PSScriptRoot
 Set-Location -LiteralPath $workspace
 New-Item -ItemType Directory -Path '.local/tools' -Force | Out-Null
@@ -31,6 +32,19 @@ if ($javaVersion -notmatch 'version "(2[1-9]|[3-9][0-9])') {
     Expand-Archive -LiteralPath '.local/tools/java.zip' -DestinationPath '.local/tools/java' -Force
     $env:MINEBLOX_JAVA = (Get-ChildItem -LiteralPath '.local/tools/java' -Filter java.exe -Recurse | Select-Object -First 1).FullName
 }
+if ($MinecraftClient -or $ClientOnly) {
+    $clientRuntime = Get-ChildItem -LiteralPath '.local/tools/java21' -Filter javaw.exe -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+    if (-not $clientRuntime) {
+        Write-Output 'Installing the Minecraft client Java 21 runtime…'
+        $release = Invoke-RestMethod -Uri 'https://api.adoptium.net/v3/assets/latest/21/hotspot?architecture=x64&image_type=jre&os=windows'
+        $package = $release[0].binary.package
+        Get-VerifiedFile $package.link '.local/tools/java21.zip' $package.checksum
+        Expand-Archive -LiteralPath '.local/tools/java21.zip' -DestinationPath '.local/tools/java21' -Force
+        $clientRuntime = Get-ChildItem -LiteralPath '.local/tools/java21' -Filter javaw.exe -Recurse | Select-Object -First 1
+    }
+    if (-not $clientRuntime) { throw 'Java 21 client runtime is missing after installation' }
+    $env:MINEBLOX_CLIENT_JAVA = $clientRuntime.FullName
+}
 & node tools/install-tools.js
 if ($LASTEXITCODE -ne 0) { throw 'Roblox build tool installation failed' }
 $lockHash = File-Hash 'package-lock.json'
@@ -46,5 +60,11 @@ if ($ImportAudio) {
 }
 if ($MinecraftAssets) { & node tools/prepare-roblox-assets.js --remote } else { & node tools/prepare-roblox-assets.js }
 if ($LASTEXITCODE -ne 0) { throw 'Asset preparation failed' }
-& node tools/launcher.js
+if ($ClientOnly) {
+    & node tools/native-client.js --ensure-server --username $MinecraftName --stay-open
+} else {
+    $launchArgs = @('tools/launcher.js')
+    if ($MinecraftClient) { $launchArgs += @('--minecraft-client', '--minecraft-name', $MinecraftName) }
+    & node @launchArgs
+}
 exit $LASTEXITCODE

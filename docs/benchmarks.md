@@ -1,5 +1,32 @@
 # Validation and benchmark baseline — 2026-10-06
 
+## Direct Minecraft client validation — 2026-10-08
+
+`Minecraft.bat` started the real local server and launched the official Java
+1.21.4 GUI as `MinebloxJava`. Both client Quick Play metadata and the vanilla
+server log confirmed an automatic join to `127.0.0.1:25565`. A normal client
+window close exited with code 0, stopped its owned server and saved all three
+dimensions. The test found an early TCP/status readiness race; startup now waits
+for a compatible Minecraft status response and has a regression check.
+
+The [server-reuse check](measurements/client-launch-reuse-2026-10-08.json)
+confirmed an automatic GUI join to an existing server, a normal client exit,
+continued server availability and bridge health HTTP 200 after client closure.
+The controlled test server then saved and stopped through its private control
+pipe. These are launcher/lifetime checks, not new gameplay parity measurements.
+
+The [combined-launcher check](measurements/client-launch-combined-2026-10-08.json)
+also confirmed automatic GUI joining and that stopping the launcher saved the
+server and closed its owned GUI. This test used `--no-studio`; Studio startup
+itself remains covered by the prior Windows launcher validation below.
+All 46 Windows unit checks and the real TCP integration fixture passed.
+
+The earlier graphics startup failure described below was resolved in these
+launcher tests using the full metadata-derived JVM arguments and Java 21
+`javaw.exe`. This does not retroactively change the GUI presence recorded in the
+Patch 2 gameplay fixture. Client downloads, asset objects and raw game logs
+remain ignored private files.
+
 ## Patch 2 checks — 2026-10-07
 
 The [latest live fixture](measurements/playable-patch2-2026-10-07.json) passed

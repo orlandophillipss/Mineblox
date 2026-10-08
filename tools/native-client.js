@@ -11,8 +11,16 @@ import {
 import { spawn, execFileSync } from 'node:child_process';
 import { openSync, closeSync } from 'node:fs';
 import path from 'node:path';
+import { clientArguments, offlineUuid, rulesAllow } from './client-launch.js';
+import { ensureLocalServer, stopOwnedServer } from './client-server.js';
+import { createInterface } from 'node:readline';
 const root = path.resolve('.local/native-client');
 const version = '1.21.4';
+if (process.platform !== 'win32')
+  throw new Error('The direct client launcher currently supports Windows');
+const nameIndex = process.argv.indexOf('--username');
+const name = nameIndex < 0 ? 'MinebloxJava' : process.argv[nameIndex + 1];
+const uuid = offlineUuid(name);
 const digest = (b) => createHash('sha1').update(b).digest('hex');
 await mkdir(root, { recursive: true });
 async function get(url, file, sha1, size) {
@@ -49,12 +57,19 @@ try {
     await readFile(path.join(root, 'version.json'), 'utf8'),
   );
 } catch {
-  const manifest = await (
-    await fetch(
-      'https://piston-meta.mojang.com/mc/game/version_manifest_v2.json',
-    )
-  ).json();
+  console.log('Downloading official Minecraft 1.21.4 client metadata…');
+  const response = await fetch(
+    'https://piston-meta.mojang.com/mc/game/version_manifest_v2.json',
+    { signal: AbortSignal.timeout(30000) },
+  );
+  if (!response.ok)
+    throw new Error(`Minecraft metadata HTTP ${response.status}`);
+  const manifest = await response.json();
   const entry = manifest.versions.find((v) => v.id === version);
+  if (!entry)
+    throw new Error(
+      'Pinned Minecraft client version is absent from the official manifest',
+    );
   await get(entry.url, path.join(root, 'version.json'), entry.sha1);
   metadata = JSON.parse(
     await readFile(path.join(root, 'version.json'), 'utf8'),
@@ -68,21 +83,9 @@ const classpath = [
     metadata.downloads.client.size,
   ),
 ];
-function allowed(rules) {
-  if (!rules) return true;
-  let allow = false;
-  for (const rule of rules)
-    if (
-      !rule.features &&
-      (!rule.os ||
-        ((!rule.os.name || rule.os.name === 'windows') &&
-          (!rule.os.arch || new RegExp(rule.os.arch).test('amd64'))))
-    )
-      allow = rule.action === 'allow';
-  return allow;
-}
+console.log('Preparing verified client libraries and game assets…');
 for (const library of metadata.libraries) {
-  if (!allowed(library.rules)) continue;
+  if (!rulesAllow(library.rules)) continue;
   const a = library.downloads.artifact;
   if (a)
     classpath.push(
@@ -141,6 +144,10 @@ await Promise.all(
         a.size,
       );
       downloaded++;
+      if (downloaded % 100 === 0)
+        console.log(
+          `Downloaded ${downloaded} missing Minecraft asset objects…`,
+        );
     }
   }),
 );
@@ -155,18 +162,19 @@ for (const file of classpath.filter((f) => f.includes('natives-windows')))
   });
 const gameDir = path.join(root, 'game');
 await mkdir(gameDir, { recursive: true });
-await writeFile(
-  path.join(gameDir, 'options.txt'),
-  'renderDistance:6\nsimulationDistance:5\nmaxFps:60\nguiScale:2\n',
-);
-const name = 'MCGraphObserver';
-const bytes = createHash('md5').update(`OfflinePlayer:${name}`).digest();
-bytes[6] = (bytes[6] & 15) | 48;
-bytes[8] = (bytes[8] & 63) | 128;
-const hex = bytes.toString('hex');
-const uuid = `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
-let java = process.env.MINEBLOX_JAVA ?? 'java';
-if (!process.env.MINEBLOX_JAVA) {
+try {
+  await writeFile(
+    path.join(gameDir, 'options.txt'),
+    'renderDistance:6\nsimulationDistance:5\nmaxFps:60\nguiScale:2\n',
+    { flag: 'wx' },
+  );
+} catch (error) {
+  if (error.code !== 'EEXIST') throw error;
+}
+if (process.argv.includes('--prepare-only')) process.exit(0);
+let java =
+  process.env.MINEBLOX_CLIENT_JAVA ?? process.env.MINEBLOX_JAVA ?? 'javaw';
+if (!process.env.MINEBLOX_CLIENT_JAVA && !process.env.MINEBLOX_JAVA) {
   try {
     const directories = await readdir('.local/tools/java21', {
       withFileTypes: true,
@@ -175,62 +183,86 @@ if (!process.env.MINEBLOX_JAVA) {
       (d) => d.isDirectory() && d.name.startsWith('jdk-21'),
     );
     if (runtime)
-      java = path.resolve('.local/tools/java21', runtime.name, 'bin/java.exe');
+      java = path.resolve('.local/tools/java21', runtime.name, 'bin/javaw.exe');
   } catch {
     /* Use the installed launcher runtime. */
   }
 }
-const log = openSync(path.join(root, 'client.log'), 'a');
-const child = spawn(
-  java,
-  [
-    '-Xmx1G',
-    '-Xss4M',
-    `-Djava.library.path=${path.join(root, 'natives')}`,
-    `-Dorg.lwjgl.librarypath=${path.join(root, 'natives')}`,
-    '-cp',
-    classpath.join(path.delimiter),
-    metadata.mainClass,
-    '--username',
-    name,
-    '--version',
-    version,
-    '--gameDir',
-    gameDir,
-    '--assetsDir',
-    assets,
-    '--assetIndex',
-    metadata.assetIndex.id,
-    '--uuid',
-    uuid,
-    '--accessToken',
-    '0',
-    '--userType',
-    'legacy',
-    '--versionType',
-    'release',
-    '--width',
-    '960',
-    '--height',
-    '600',
-    '--quickPlayMultiplayer',
-    '127.0.0.1:25565',
-  ],
-  {
-    windowsHide: false,
-    detached: true,
-    stdio: ['ignore', log, log],
-    cwd: gameDir,
-  },
+const server = await ensureLocalServer(
+  process.argv.includes('--ensure-server'),
 );
-closeSync(log);
-console.log(`Official Minecraft GUI launched as ${name}, PID ${child.pid}`);
-if (process.argv.includes('--stay-open'))
-  await new Promise((resolve) =>
-    child.once('exit', (code, signal) => {
-      console.log(`Minecraft GUI exited: ${code ?? signal}`);
-      if (code !== 0) process.exitCode = 1;
-      resolve();
-    }),
-  );
-else child.unref();
+try {
+  const args = clientArguments(metadata, {
+    natives_directory: path.join(root, 'natives'),
+    classpath: classpath.join(path.delimiter),
+    launcher_name: 'Mineblox',
+    launcher_version: '0.2.0',
+    auth_player_name: name,
+    version_name: version,
+    game_directory: gameDir,
+    assets_root: assets,
+    assets_index_name: metadata.assetIndex.id,
+    auth_uuid: uuid,
+    auth_access_token: '0',
+    clientid: '0',
+    auth_xuid: '0',
+    user_type: 'legacy',
+    version_type: 'release',
+    resolution_width: 1280,
+    resolution_height: 720,
+    quickPlayPath: 'quickPlay/mineblox.json',
+    quickPlayMultiplayer: '127.0.0.1:25565',
+  });
+  const log = openSync(path.join(root, 'client.log'), 'a');
+  let child;
+  try {
+    child = spawn(java, args, {
+      windowsHide: false,
+      detached: true,
+      stdio: ['ignore', log, log],
+      cwd: gameDir,
+    });
+  } finally {
+    closeSync(log);
+  }
+  await new Promise((resolve, reject) => {
+    child.once('spawn', resolve);
+    child.once('error', reject);
+  });
+  console.log(`Official Minecraft GUI launched as ${name}, PID ${child.pid}`);
+  if (
+    process.argv.includes('--stay-open') ||
+    server ||
+    process.argv.includes('--managed-pipe')
+  ) {
+    let requestedStop = false;
+    const stop = () => {
+      requestedStop = true;
+      if (child.exitCode === null && child.signalCode === null) child.kill();
+    };
+    for (const signal of ['SIGINT', 'SIGTERM']) process.once(signal, stop);
+    const control = process.argv.includes('--managed-pipe')
+      ? createInterface({ input: process.stdin })
+      : null;
+    control?.on('line', (line) => {
+      if (line === 'stop') stop();
+    });
+    control?.once('close', stop);
+    await new Promise((resolve) =>
+      child.once('exit', (code, signal) => {
+        console.log(`Minecraft GUI exited: ${code ?? signal}`);
+        if (code !== 0 && !requestedStop) {
+          process.exitCode = 1;
+          console.error(
+            'See .local/native-client/client.log for Minecraft launch diagnostics.',
+          );
+        }
+        resolve();
+      }),
+    );
+    control?.close();
+    for (const signal of ['SIGINT', 'SIGTERM']) process.off(signal, stop);
+  } else child.unref();
+} finally {
+  await stopOwnedServer(server);
+}

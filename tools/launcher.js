@@ -9,10 +9,14 @@ import { createGateway } from '../bridge/gateway.js';
 import { buildPlace } from './build-place.js';
 import { openStudio } from './open-studio.js';
 import { clearRequiredPorts } from './startup-processes.js';
+import { createInterface } from 'node:readline';
+import { offlineUuid } from './client-launch.js';
+import { waitForLocalServer } from './client-server.js';
 
 const children = [];
 let gateway,
   minecraft,
+  nativeClient,
   stopping = false;
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 await mkdir('.local/logs', { recursive: true });
@@ -61,17 +65,42 @@ async function shutdown(code = 0) {
   console.log('Stopping the bridge and saving the Minecraft world…');
   await gateway?.close();
   if (minecraft?.stdin.writable) minecraft.stdin.write('stop\n');
-  for (const child of children) if (child !== minecraft) child.kill();
+  if (nativeClient?.stdin.writable) nativeClient.stdin.end('stop\n');
+  for (const child of children)
+    if (child !== minecraft && child !== nativeClient) child.kill();
   if (minecraft) {
     for (let i = 0; i < 100 && minecraft.exitCode === null; i++)
       await sleep(100);
     if (minecraft.exitCode === null) minecraft.kill();
   }
+  if (nativeClient) {
+    for (
+      let i = 0;
+      i < 50 &&
+      nativeClient.exitCode === null &&
+      nativeClient.signalCode === null;
+      i++
+    )
+      await sleep(100);
+    if (nativeClient.exitCode === null && nativeClient.signalCode === null)
+      nativeClient.kill();
+  }
   process.exit(code);
 }
 for (const signal of ['SIGINT', 'SIGTERM'])
   process.once(signal, () => void shutdown());
+if (process.argv.includes('--managed-pipe')) {
+  const control = createInterface({ input: process.stdin });
+  control.on('line', (line) => {
+    if (line === 'stop') void shutdown();
+  });
+  control.once('close', () => void shutdown());
+}
 try {
+  const nameIndex = process.argv.indexOf('--minecraft-name');
+  const nativeName =
+    nameIndex < 0 ? 'MinebloxJava' : process.argv[nameIndex + 1];
+  if (process.argv.includes('--minecraft-client')) offlineUuid(nativeName);
   await rm('.local/ready.json', { force: true });
   try {
     await access('.local/minecraft/server.jar');
@@ -136,11 +165,7 @@ try {
     'minecraft',
     { cwd: path.resolve('.local/minecraft') },
   );
-  for (let i = 0; i < 180 && !(await portOpen(25565)); i++) await sleep(500);
-  if (!(await portOpen(25565)))
-    throw new Error(
-      'Minecraft did not become ready; see .local/logs/minecraft.log',
-    );
+  await waitForLocalServer(minecraft);
   const bridgeLog = log('bridge');
   let models = {};
   try {
@@ -172,8 +197,8 @@ try {
     JSON.stringify({ url, token, localUrl: url }, null, 2),
   );
   const place = await buildPlace({ url, token });
-  console.log('Opening the generated Roblox place…');
   if (!process.argv.includes('--no-studio')) {
+    console.log('Opening the generated Roblox place…');
     await openStudio(place);
     const automation = spawn(process.execPath, ['tools/studio-auto.js'], {
       stdio: 'inherit',
@@ -184,7 +209,9 @@ try {
     );
   }
   console.log(
-    'READY — In Studio, press Play. WASD moves; Space jumps; Ctrl sprints; Shift sneaks; Tab releases the cursor.',
+    process.argv.includes('--no-studio')
+      ? 'READY — Local Minecraft server and bridge are running.'
+      : 'READY — In Studio, press Play. WASD moves; Space jumps; Ctrl sprints; Shift sneaks; Tab releases the cursor.',
   );
   console.log(
     'Keep this window open. Ctrl+C stops services and saves the world. Native Minecraft clients can join 127.0.0.1:25565.',
@@ -193,6 +220,26 @@ try {
     '.local/ready.json',
     JSON.stringify({ ready: true, place, startedAt: new Date().toISOString() }),
   );
+  if (process.argv.includes('--minecraft-client')) {
+    nativeClient = spawn(
+      process.execPath,
+      [
+        'tools/native-client.js',
+        '--username',
+        nativeName,
+        '--stay-open',
+        '--managed-pipe',
+      ],
+      { stdio: ['pipe', 'inherit', 'inherit'], windowsHide: true },
+    );
+    children.push(nativeClient);
+    nativeClient.stdin.on('error', (error) =>
+      console.error(`Minecraft client control: ${error.message}`),
+    );
+    nativeClient.on('error', (error) =>
+      console.error(`Minecraft client: ${error.message}`),
+    );
+  }
   setInterval(() => {}, 10000);
 } catch (error) {
   console.error(error.message);

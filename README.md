@@ -76,6 +76,42 @@ Tab to release the cursor. `/names display|username` changes Roblox chat names;
 `/sound on|off` and `/music on|off` control configured audio. Native Java 1.21.4
 clients connect to **127.0.0.1:25565**.
 
+## Direct Minecraft client
+
+Double-click **Minecraft.bat** to open the official Java **1.21.4** client and
+join **127.0.0.1:25565** automatically through Minecraft's Quick Play feature.
+It installs the missing Java 21 client runtime and downloads verified official
+client files into ignored `.local/native-client`. Your client settings are
+preserved across launches. First-time downloads can take several minutes.
+
+An existing compatible local server is reused. If none is running, the launcher
+starts Minecraft and the bridge without opening Studio; closing the client then
+saves the world and stops those services. Closing a client connected to an
+already-running server leaves that server running.
+
+To launch Studio, the server, bridge and native Minecraft client together:
+
+```bat
+Mineblox.bat -MinecraftClient
+```
+
+The default native development player is `MinebloxJava`. Choose a different
+3–16 character name using letters, numbers or underscores:
+
+```bat
+Minecraft.bat -MinecraftName MyPlayer
+Mineblox.bat -MinecraftClient -MinecraftName MyPlayer
+```
+
+Use a name distinct from the Roblox player's mapped Minecraft username to keep
+both connected. This is an offline identity for the loopback development server;
+Microsoft account sign-in/linking is not implemented. Launcher credentials are
+never read. EULA acceptance is still required on a new installation. Downloaded
+game binaries and assets remain private and are not included in this repository.
+
+With dependencies and a suitable Java runtime already installed, the equivalent
+development command is `npm run minecraft:client -- --username MyPlayer`.
+
 ## Local development
 
 Requirements: Node 24, npm, Java 21 or newer for the pinned development server,
