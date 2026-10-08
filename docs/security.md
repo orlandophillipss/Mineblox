@@ -1,21 +1,32 @@
 # Prototype security boundary
 
-Development only: Minecraft target is enforced to loopback, offline authentication
+Minecraft target is enforced to loopback, offline authentication
 is explicit, gateway listens on loopback by default, and all endpoints require a
 unique bearer secret of at least 32 characters. `.env` and `.local` are ignored.
 Roblox server owns the engine-verified user identity; gateway does not authenticate
 Roblox users independently. Do not expose this as a public multi-tenant service.
 
 Controls are bounded full intentions, never destinations or gameplay outcomes.
-Local launcher secrets are regenerated each launch and embedded exclusively in
+Local launcher secrets are preserved across restarts and embedded exclusively in
 ServerScriptService's private development config. They are never sent through
 client remotes or logged. Studio-only HTTP/string-secret exceptions are rejected
 by published game transport. Terrain acknowledgements affect rendering only;
 they cannot alter Minecraft world state. Input and ack tables have bounded fields.
 Version/sequence/control mask/look bounds, body/session/request caps, duplicate
 identity reservation, input expiry and disconnect cleanup are implemented and
-tested. Production needs per-game-server ownership, per-user action quotas,
-token rotation, account linking, transport deployment and permission checks.
+tested. Published builds omit the development secret and private image cache;
+they use a domain-scoped Roblox Secret over HTTPS. Deployment mode bounds game
+server owners and request quotas and checks session ownership on every request.
+The owner header scopes sessions within one trusted experience; possession of
+the shared secret still grants gateway access. This is not independent proof of
+a Roblox job's identity. Production still needs account linking, per-user action
+quotas, token rotation procedures, permission/runtime checks and remote load tests.
+
+The manager console uses local authenticated IPC and is never a public HTTP
+endpoint. It controls the actual Minecraft process stdin. World copies reject
+links/junctions, and a live host lock blocks world changes and backups. ZIPs omit
+private state, downloaded binaries, textures and audio. See [deployment](deployment.md)
+for the distinction between temporary test tunnels and stable domain hosting.
 
 ## Dependency audit, 2026-10-06
 

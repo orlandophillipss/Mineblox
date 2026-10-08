@@ -160,7 +160,10 @@ for (const file of classpath.filter((f) => f.includes('natives-windows')))
     windowsHide: true,
     stdio: 'ignore',
   });
-const gameDir = path.join(root, 'game');
+const gameDir =
+  name === 'MinebloxJava'
+    ? path.join(root, 'game')
+    : path.join(root, 'clients', name.toLowerCase());
 await mkdir(gameDir, { recursive: true });
 try {
   await writeFile(

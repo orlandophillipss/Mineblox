@@ -3,10 +3,21 @@ import { execFileSync } from 'node:child_process';
 import path from 'node:path';
 import { access } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
+import { publicUrl } from './tunnel.js';
+import { validateContent, EMPTY_CONTENT } from '../bridge/content.js';
 
-export async function buildPlace({ url, token }) {
+export async function buildPlace({
+  url,
+  token,
+  published = false,
+  content = EMPTY_CONTENT,
+}) {
+  if (published) {
+    url = publicUrl(url);
+    content = validateContent(content);
+  }
   const generation = randomUUID();
-  const root = path.resolve('.local/roblox');
+  const root = path.resolve(published ? '.local/published' : '.local/roblox');
   await mkdir(root, { recursive: true });
   let audio = JSON.parse(await readFile('roblox/audio-defaults.json', 'utf8'));
   try {
@@ -31,7 +42,9 @@ export async function buildPlace({ url, token }) {
   );
   await writeFile(
     path.join(root, 'DevelopmentConfig.luau'),
-    `-- Private local development configuration. Never publish this place with this token.\nreturn { url = ${JSON.stringify(url)}, token = ${JSON.stringify(token)}, generation = ${JSON.stringify(generation)} }\n`,
+    published
+      ? `-- Published configuration: credentials are read from Roblox Secret MINEBLOX_TOKEN.\nreturn { url = ${JSON.stringify(url)}, published = true, generation = ${JSON.stringify(generation)} }\n`
+      : `-- Private local development configuration. Never publish this place with this token.\nreturn { url = ${JSON.stringify(url)}, token = ${JSON.stringify(token)}, generation = ${JSON.stringify(generation)} }\n`,
   );
   await writeFile(
     path.join(root, 'generation.json'),
@@ -39,19 +52,28 @@ export async function buildPlace({ url, token }) {
   );
   const source = (filename) => ({ $path: path.resolve('roblox', filename) });
   let developmentAssets = {};
-  try {
-    await access(path.join(root, 'DevelopmentAssets.luau'));
+  if (published) {
+    await writeFile(
+      path.join(root, 'PublishedAssets.luau'),
+      `return game:GetService("HttpService"):JSONDecode(${JSON.stringify(JSON.stringify(content))})\n`,
+    );
     developmentAssets = {
-      DevelopmentAssets: { $path: path.join(root, 'DevelopmentAssets.luau') },
+      PublishedAssets: { $path: path.join(root, 'PublishedAssets.luau') },
     };
-    for (const file of await readdir(root))
-      if (/^AssetPixels\d+\.luau$/.test(file))
-        developmentAssets[file.replace('.luau', '')] = {
-          $path: path.join(root, file),
-        };
-  } catch {
-    /* Substitute colors remain available. */
-  }
+  } else
+    try {
+      await access(path.join(root, 'DevelopmentAssets.luau'));
+      developmentAssets = {
+        DevelopmentAssets: { $path: path.join(root, 'DevelopmentAssets.luau') },
+      };
+      for (const file of await readdir(root))
+        if (/^AssetPixels\d+\.luau$/.test(file))
+          developmentAssets[file.replace('.luau', '')] = {
+            $path: path.join(root, file),
+          };
+    } catch {
+      /* Substitute colors remain available. */
+    }
   const project = {
     name: 'Mineblox',
     tree: {
@@ -114,7 +136,9 @@ export async function buildPlace({ url, token }) {
   await writeFile(file, JSON.stringify(project, null, 2));
   const place = path.join(root, 'Mineblox.rbxlx');
   execFileSync(
-    path.resolve('.local/tools/rojo/rojo.exe'),
+    path.resolve(
+      `.local/tools/rojo/rojo${process.platform === 'win32' ? '.exe' : ''}`,
+    ),
     ['build', file, '-o', place],
     { stdio: 'inherit', windowsHide: true },
   );
@@ -124,6 +148,21 @@ if (
   process.argv[1] &&
   path.resolve(process.argv[1]) === path.resolve('tools/build-place.js')
 ) {
-  const config = JSON.parse(await readFile('.local/launcher.json', 'utf8'));
+  let config;
+  if (process.argv.includes('--published')) {
+    let content = EMPTY_CONTENT;
+    try {
+      content = JSON.parse(
+        await readFile('.local/content/catalog.json', 'utf8'),
+      );
+    } catch (error) {
+      if (error.code !== 'ENOENT') throw error;
+    }
+    config = {
+      published: true,
+      url: process.argv[process.argv.indexOf('--published') + 1],
+      content,
+    };
+  } else config = JSON.parse(await readFile('.local/launcher.json', 'utf8'));
   console.log(await buildPlace(config));
 }

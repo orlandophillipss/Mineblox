@@ -1,0 +1,30 @@
+services:
+  mineblox:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    restart: unless-stopped
+    stop_grace_period: 30s
+    stdin_open: true
+    tty: true
+    volumes:
+      - mineblox-data:/app/.local
+    # Both the gateway and offline Minecraft bind inside this container only.
+    # Use the containerized connector below; there are no published host ports.
+    environment:
+      MINEBLOX_DEPLOYMENT: 'true'
+      MINEBLOX_GATEWAY_PORT: '8080'
+  tunnel:
+    image: cloudflare/cloudflared:2026.10.0
+    network_mode: service:mineblox
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run --token-file /run/secrets/tunnel-token
+    secrets:
+      - tunnel-token
+    depends_on:
+      - mineblox
+secrets:
+  tunnel-token:
+    file: ../.local/deployment/tunnel-token.txt
+volumes:
+  mineblox-data:

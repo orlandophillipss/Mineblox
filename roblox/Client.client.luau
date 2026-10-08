@@ -54,6 +54,9 @@ local crackLabels={}
 local Images=require(modules.Images)
 local ItemVisual=require(modules.ItemVisual)
 local EntityVisual=require(modules.EntityVisual)
+net:WaitForChild("Content").OnClientEvent:Connect(function(catalog)
+	if Images.update(catalog) then renderer:clear() Images.refreshGui(hud.gui) for _,entity in pairs(entities) do if entity.model then entity.model:Destroy() end end entities={} net.ContentAck:FireServer(catalog.version) end
+end)
 for _,face in ipairs(Enum.NormalId:GetEnumItems()) do
 	local surface=Instance.new("SurfaceGui") surface.Face=face surface.CanvasSize=Vector2.new(64,64) surface.Adornee=selectionPart surface.Parent=selectionPart
 	local image=Instance.new("ImageLabel") image.BackgroundTransparency=1 image.Size=UDim2.fromScale(1,1) image.ResampleMode=Enum.ResamplerMode.Pixelated image.Visible=false image.Parent=surface table.insert(crackLabels,image)

@@ -9,7 +9,7 @@ function Transport.new(baseUrl, secret)
 	local loopback = RunService:IsStudio() and string.match(baseUrl, "^http://127%.0%.0%.1:%d+$") ~= nil
 	assert(loopback or string.sub(baseUrl, 1, 8) == "https://", "Use HTTPS; loopback HTTP is only allowed in local Studio")
 	assert(type(secret) ~= "string" or RunService:IsStudio(), "Published games require a Roblox Secret")
-	return setmetatable({ url = baseUrl, secret = secret, sessions = {}, busy = false, stateSeq = 0 }, Transport)
+	return setmetatable({ url = baseUrl, secret = secret, sessions = {}, busy = false, stateSeq = 0, owner = game.JobId~="" and game.JobId or HttpService:GenerateGUID(false) }, Transport)
 end
 
 function Transport:request(method, route, payload)
@@ -17,7 +17,7 @@ function Transport:request(method, route, payload)
 	local ok,response = pcall(HttpService.RequestAsync,HttpService,{
 		Url = self.url .. route,
 		Method = method,
-		Headers = { Authorization = type(self.secret) == "string" and ("Bearer " .. self.secret) or self.secret:AddPrefix("Bearer "), ["Content-Type"] = "application/json" },
+		Headers = { Authorization = type(self.secret) == "string" and ("Bearer " .. self.secret) or self.secret:AddPrefix("Bearer "), ["Content-Type"] = "application/json", ["X-Mineblox-Server"]=self.owner },
 		Body = payload and HttpService:JSONEncode(payload) or nil,
 	})
 	if ok and not response.Success and (route=="/v1/terrain" or response.StatusCode<500 and response.StatusCode~=429) then

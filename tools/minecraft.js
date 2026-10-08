@@ -2,13 +2,27 @@ import { createHash } from 'node:crypto';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { spawn } from 'node:child_process';
 import path from 'node:path';
+import { WorldStore, serverProperties } from './worlds.js';
 
 const root = path.resolve('.local/minecraft');
 const version = '1.21.4';
 const jar = path.join(root, 'server.jar');
+const world = await new WorldStore().active();
+const worldRoot = world.directory;
 const command = process.argv[2];
+async function syncWorldEula() {
+  if (worldRoot !== root) {
+    // Worlds share the same pinned server and explicit operator acceptance.
+    // Refresh an earlier eula=false copy after the operator accepts or revokes.
+    await writeFile(
+      path.join(worldRoot, 'eula.txt'),
+      await readFile(path.join(root, 'eula.txt'), 'utf8'),
+    );
+  }
+}
 if (command === 'prepare' || command === 'configure') {
   await mkdir(root, { recursive: true });
+  await mkdir(worldRoot, { recursive: true });
   if (command === 'prepare') {
     const response = await fetch(
       'https://piston-meta.mojang.com/mc/game/version_manifest_v2.json',
@@ -65,29 +79,13 @@ if (command === 'prepare' || command === 'configure') {
   } catch (error) {
     if (error.code !== 'EEXIST') throw error;
   }
+  await syncWorldEula();
   await writeFile(
-    path.join(root, 'server.properties'),
-    [
-      'server-ip=127.0.0.1',
-      'server-port=25565',
-      'online-mode=false',
-      'enforce-secure-profile=false',
-      'level-name=mineblox-overworld',
-      'level-type=minecraft:normal',
-      'level-seed=12345',
-      'generate-structures=true',
-      'spawn-protection=0',
-      'gamemode=survival',
-      'difficulty=normal',
-      'view-distance=3',
-      'simulation-distance=3',
-      'max-players=20',
-      'enable-rcon=false',
-      'enable-query=false',
-    ].join('\n') + '\n',
+    path.join(worldRoot, 'server.properties'),
+    serverProperties(world),
   );
   console.log(
-    `Configured Minecraft ${version} with vanilla world generation in ${root}. Existing worlds and EULA acceptance are preserved.`,
+    `Configured Minecraft ${version} with vanilla world generation in ${worldRoot}. Existing worlds and EULA acceptance are preserved.`,
   );
 } else if (command === 'start') {
   const eula = await readFile(path.join(root, 'eula.txt'), 'utf8');
@@ -95,8 +93,9 @@ if (command === 'prepare' || command === 'configure') {
     throw new Error(
       'Minecraft EULA acceptance required: review https://www.minecraft.net/en-us/eula and set eula=true in .local/minecraft/eula.txt',
     );
+  await syncWorldEula();
   const child = spawn('java', ['-Xms512M', '-Xmx1G', '-jar', jar, 'nogui'], {
-    cwd: root,
+    cwd: worldRoot,
     stdio: 'inherit',
   });
   child.on('error', (error) => {

@@ -12,8 +12,14 @@ import { clearRequiredPorts } from './startup-processes.js';
 import { createInterface } from 'node:readline';
 import { offlineUuid } from './client-launch.js';
 import { waitForLocalServer } from './client-server.js';
+import { WorldStore } from './worlds.js';
+import { acquireHostLock } from './host-lock.js';
+import { startTunnel } from './tunnel.js';
+import { ContentStore } from '../bridge/content.js';
 
 const children = [];
+const contentStore = new ContentStore();
+let releaseLock;
 let gateway,
   minecraft,
   nativeClient,
@@ -31,6 +37,10 @@ function launch(command, args, name, options = {}) {
   });
   child.stdout?.pipe(output);
   child.stderr?.pipe(output);
+  if (name === 'minecraft') {
+    child.stdout?.pipe(process.stdout, { end: false });
+    child.stderr?.pipe(process.stderr, { end: false });
+  }
   child.once('error', (error) => {
     console.error(`${name}: ${error.message}`);
     void shutdown(1);
@@ -85,22 +95,40 @@ async function shutdown(code = 0) {
     if (nativeClient.exitCode === null && nativeClient.signalCode === null)
       nativeClient.kill();
   }
+  await releaseLock?.();
   process.exit(code);
 }
 for (const signal of ['SIGINT', 'SIGTERM'])
   process.once(signal, () => void shutdown());
-if (process.argv.includes('--managed-pipe')) {
+{
   const control = createInterface({ input: process.stdin });
   control.on('line', (line) => {
     if (line === 'stop') void shutdown();
+    else {
+      const command = process.argv.includes('--managed-pipe')
+        ? line.startsWith('console ')
+          ? line.slice(8)
+          : null
+        : line;
+      if (
+        command &&
+        command.length <= 512 &&
+        ![...command].some((c) => c.charCodeAt(0) < 32) &&
+        minecraft?.stdin.writable
+      )
+        minecraft.stdin.write(command + '\n');
+    }
   });
-  control.once('close', () => void shutdown());
+  if (process.argv.includes('--managed-pipe'))
+    control.once('close', () => void shutdown());
 }
 try {
   const nameIndex = process.argv.indexOf('--minecraft-name');
   const nativeName =
     nameIndex < 0 ? 'MinebloxJava' : process.argv[nameIndex + 1];
   if (process.argv.includes('--minecraft-client')) offlineUuid(nativeName);
+  releaseLock = await acquireHostLock();
+  const world = await new WorldStore().active();
   await rm('.local/ready.json', { force: true });
   try {
     await access('.local/minecraft/server.jar');
@@ -132,7 +160,20 @@ try {
     Number(savedPort[1]) <= 65535 &&
     Number(savedPort[1]) !== 25565;
   const token = reusable ? previous.token : randomBytes(32).toString('hex');
-  const preferredPort = reusable ? Number(new URL(previous.url).port) : 0;
+  const configuredPort =
+    process.env.MINEBLOX_GATEWAY_PORT === undefined
+      ? null
+      : Number(process.env.MINEBLOX_GATEWAY_PORT);
+  if (
+    configuredPort !== null &&
+    (!Number.isInteger(configuredPort) ||
+      configuredPort < 1 ||
+      configuredPort > 65535 ||
+      configuredPort === 25565)
+  )
+    throw new Error('Invalid MINEBLOX_GATEWAY_PORT');
+  const preferredPort =
+    configuredPort ?? (reusable ? Number(new URL(previous.url).port) : 0);
   if (process.platform === 'win32') {
     for (const owner of clearRequiredPorts([25565, preferredPort])) {
       console.log(
@@ -163,10 +204,22 @@ try {
       'nogui',
     ],
     'minecraft',
-    { cwd: path.resolve('.local/minecraft') },
+    { cwd: world.directory },
   );
   await waitForLocalServer(minecraft);
   const bridgeLog = log('bridge');
+  try {
+    await contentStore.reload();
+  } catch (error) {
+    if (error.code !== 'ENOENT') throw error;
+  }
+  const contentPoll = setInterval(() => {
+    void contentStore.reload().catch((error) => {
+      if (error.code !== 'ENOENT')
+        console.error(`Content update rejected: ${error.message}`);
+    });
+  }, 60000);
+  contentPoll.unref();
   let models = {};
   try {
     models = JSON.parse(
@@ -181,6 +234,10 @@ try {
     terrainRadius: 3,
     minecraft: { host: '127.0.0.1', port: 25565, version: '1.21.4' },
     createBot: mineflayer.createBot,
+    requireOwner:
+      process.argv.includes('--tunnel') ||
+      process.env.MINEBLOX_DEPLOYMENT === 'true',
+    content: () => contentStore.current,
     log: (record) => bridgeLog.write(JSON.stringify(record) + '\n'),
   });
   await new Promise((resolve, reject) => {
@@ -196,7 +253,38 @@ try {
     '.local/launcher.json',
     JSON.stringify({ url, token, localUrl: url }, null, 2),
   );
-  const place = await buildPlace({ url, token });
+  let remoteUrl;
+  if (process.argv.includes('--tunnel')) {
+    const mode = process.argv[process.argv.indexOf('--tunnel') + 1];
+    const tunnel = await startTunnel(mode, url);
+    children.push(tunnel.child);
+    remoteUrl = tunnel.url;
+    tunnel.child.once('exit', () => {
+      if (!stopping) {
+        console.error('Remote tunnel disconnected; stopping services.');
+        void shutdown(1);
+      }
+    });
+    // Never send the bearer token to a public diagnostic tool or logger.
+    console.log(`Remote Roblox bridge: ${remoteUrl}`);
+    await writeFile(
+      '.local/deployment-endpoint.json',
+      JSON.stringify(
+        {
+          url: remoteUrl,
+          mode,
+          world: world.id,
+          secretName: 'MINEBLOX_TOKEN',
+          startedAt: new Date().toISOString(),
+        },
+        null,
+        2,
+      ),
+    );
+  }
+  const place = process.argv.includes('--no-studio')
+    ? null
+    : await buildPlace({ url: remoteUrl ?? url, token });
   if (!process.argv.includes('--no-studio')) {
     console.log('Opening the generated Roblox place…');
     await openStudio(place);
@@ -212,6 +300,9 @@ try {
     process.argv.includes('--no-studio')
       ? 'READY — Local Minecraft server and bridge are running.'
       : 'READY — In Studio, press Play. WASD moves; Space jumps; Ctrl sprints; Shift sneaks; Tab releases the cursor.',
+  );
+  console.log(
+    'Server console: say hi | op username | list | stop (save and close)',
   );
   console.log(
     'Keep this window open. Ctrl+C stops services and saves the world. Native Minecraft clients can join 127.0.0.1:25565.',

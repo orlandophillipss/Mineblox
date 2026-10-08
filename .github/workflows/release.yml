@@ -1,0 +1,41 @@
+name: Release ZIPs
+on:
+  push:
+    tags:
+      - 'v*'
+permissions:
+  contents: read
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - run: npm run format:check
+      - run: npm run lint
+      - run: npm run build
+      - run: npm run tools:install
+      - run: npm run check:luau
+      - run: npm run test:luau
+      - run: npm test
+      - run: npm run test:integration
+      - name: Check release version and create archives
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          node --input-type=module -e "import fs from 'node:fs'; if(process.env.RELEASE_TAG !== 'v'+JSON.parse(fs.readFileSync('package.json')).version) throw Error('Tag and package version differ');"
+          npm run release:zip
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          flags=()
+          if [[ "$RELEASE_TAG" == *-* ]]; then flags+=(--prerelease); fi
+          gh release create "$RELEASE_TAG" .local/releases/*.zip .local/releases/SHA256SUMS.txt .local/releases/release.json --verify-tag --title "Mineblox ${RELEASE_TAG#v}" --notes-file CHANGELOG.md "${flags[@]}"

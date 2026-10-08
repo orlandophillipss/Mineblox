@@ -1,6 +1,20 @@
 import mineflayer from 'mineflayer';
 import { createGateway } from './gateway.js';
 import { minecraftConfig } from './config.js';
+import { ContentStore } from './content.js';
+const content = new ContentStore();
+try {
+  await content.reload();
+} catch (error) {
+  if (error.code !== 'ENOENT') throw error;
+}
+const poll = setInterval(() => {
+  void content.reload().catch((error) => {
+    if (error.code !== 'ENOENT')
+      console.error(`Content update rejected: ${error.message}`);
+  });
+}, 60000);
+poll.unref();
 
 const log = (record) =>
   console.log(
@@ -11,6 +25,8 @@ const gateway = createGateway({
   minecraft: minecraftConfig(),
   createBot: mineflayer.createBot,
   log,
+  requireOwner: process.env.MINEBLOX_DEPLOYMENT === 'true',
+  content: () => content.current,
 });
 const host = process.env.BRIDGE_HOST ?? '127.0.0.1';
 const port = Number(process.env.BRIDGE_PORT ?? 8080);

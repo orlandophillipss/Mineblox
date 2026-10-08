@@ -2,7 +2,8 @@ local AssetService = game:GetService("AssetService")
 local Images = {}
 Images.cache = {}
 Images.alpha = {}
-local assetModule = script.Parent:FindFirstChild("DevelopmentAssets")
+Images.guiNames=setmetatable({},{__mode="k"})
+local assetModule = script.Parent:FindFirstChild("PublishedAssets") or script.Parent:FindFirstChild("DevelopmentAssets")
 Images.assets = assetModule and require(assetModule) or { images = {}, blocks = {}, gui = {} }
 function Images.get(key, scale)
 	if not key then return nil end
@@ -12,6 +13,7 @@ function Images.get(key, scale)
 	local data = Images.assets.images[key]
 	if not data then return nil end
 	local ok, image = pcall(function()
+		if data.assetId then Images.alpha[key]=data.alpha return AssetService:CreateEditableImageAsync(Content.fromUri(data.assetId)) end
 		local editable = AssetService:CreateEditableImage({ Size = Vector2.new(data.width * scale, data.height * scale) })
 		if not editable then return nil end
 		local bytes = buffer.create(data.width * data.height * 4)
@@ -32,8 +34,22 @@ function Images.get(key, scale)
 	if ok then Images.cache[cacheKey] = image return image end
 	return nil
 end
+function Images.update(catalog)
+	if type(catalog)~="table" or catalog.format~=1 or type(catalog.version)~="string" or type(catalog.images)~="table" or type(catalog.blocks)~="table" or type(catalog.gui)~="table" or type(catalog.items)~="table" or type(catalog.entities)~="table" then return false end
+	if Images.assets.version==catalog.version then return false end
+	Images.assets=catalog
+	-- Content changes are infrequent; keep existing images alive until their GUI/mesh
+	-- references are retired. Reuse cached image objects only for identical assets.
+	Images.cache={} Images.alpha={} return true
+end
 function Images.gui(name)
-	return Images.get(Images.assets.gui[name])
+	local image=Images.get(Images.assets.gui[name]) if image then Images.guiNames[image]=name end return image
+end
+function Images.refreshGui(root)
+	for _,label in ipairs(root:GetDescendants()) do
+		local key=label:GetAttribute("MinebloxSprite")
+		if key and label:IsA("ImageLabel") then local image=Images.gui(key) if image then label.ImageContent=Content.fromObject(image) end end
+	end
 end
 function Images.item(name) return Images.get(Images.assets.items and Images.assets.items[name]) end
 function Images.block(key) return Images.get(key,8) end

@@ -187,3 +187,103 @@ test('server supplied usernames and display names survive exchange; name collisi
     400,
   );
 });
+
+test('deployment sessions are isolated by game-server owner across state, deletion, terrain and exchange', async (t) => {
+  let pack = {
+    format: 1,
+    version: '1.0.0',
+    images: {},
+    blocks: {},
+    gui: {},
+    items: {},
+    entities: {},
+  };
+  const gateway = createGateway({
+    token,
+    minecraft: { host: '127.0.0.1' },
+    requireOwner: true,
+    maxServers: 2,
+    maxSessionsPerServer: 1,
+    content: () => pack,
+    createBot: () => {
+      const bot = fakeBot();
+      setImmediate(() => bot.emit('spawn'));
+      return bot;
+    },
+  });
+  await new Promise((resolve) =>
+    gateway.server.listen(0, '127.0.0.1', resolve),
+  );
+  t.after(() => gateway.close());
+  const base = `http://127.0.0.1:${gateway.server.address().port}`;
+  const request = async (owner, url, method = 'GET', body) => {
+    const response = await fetch(base + url, {
+      method,
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+        ...(owner ? { 'X-Mineblox-Server': owner } : {}),
+      },
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    return { status: response.status, body: await response.json() };
+  };
+  assert.equal(
+    (await request(null, '/v1/sessions', 'POST', { version: 1, robloxId: '1' }))
+      .status,
+    403,
+  );
+  const first = await request('server-owner-a', '/v1/sessions', 'POST', {
+    version: 1,
+    robloxId: '1',
+  });
+  assert.equal(first.status, 201);
+  const id = first.body.id;
+  assert.equal(
+    (await request('server-owner-b', `/v1/sessions/${id}/state`)).status,
+    404,
+  );
+  assert.equal(
+    (await request('server-owner-b', `/v1/sessions/${id}`, 'DELETE')).status,
+    404,
+  );
+  const exchange = await request('server-owner-b', '/v1/exchange', 'POST', {
+    version: 1,
+    inputs: [
+      { id, frame: { version: 1, seq: 1, controls: 0, yaw: 0, pitch: 0 } },
+    ],
+  });
+  assert.equal(exchange.body.states[0].status, 404);
+  assert.equal(
+    (
+      await request('server-owner-b', '/v1/terrain', 'POST', {
+        version: 1,
+        players: [{ id }],
+      })
+    ).status,
+    404,
+  );
+  assert.equal(
+    (await request('server-owner-a', `/v1/sessions/${id}/state`)).status,
+    200,
+  );
+  assert.equal(
+    (
+      await request('server-owner-a', '/v1/sessions', 'POST', {
+        version: 1,
+        robloxId: '2',
+      })
+    ).status,
+    429,
+  );
+  assert.equal((await request('server-owner-c', '/v1/content')).status, 429);
+  assert.equal(
+    (await request('server-owner-a', '/v1/content')).body.content.version,
+    '1.0.0',
+  );
+  pack = { ...pack, version: '1.1.0' };
+  assert.equal(
+    (await request('server-owner-a', '/v1/content')).body.content.version,
+    '1.1.0',
+  );
+});

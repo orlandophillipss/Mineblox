@@ -20,6 +20,12 @@ export async function openStudio(place) {
       '.local/studio-process.json',
       JSON.stringify({ pid: existing, place: absolute }),
     );
+    if (path.dirname(absolute) === path.resolve('.local/published')) {
+      console.log(
+        'Reusing the publication window. Reopen the built place to load changes; development scripts are never synchronized into it.',
+      );
+      return existing;
+    }
     try {
       execFileSync(process.execPath, ['tools/studio-sync.js'], {
         stdio: 'pipe',

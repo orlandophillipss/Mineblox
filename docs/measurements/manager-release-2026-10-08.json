@@ -1,0 +1,16 @@
+{
+  "checkedAt": "2026-10-08T18:37:09.023Z",
+  "unitTests": 54,
+  "protocolIntegration": true,
+  "luauChecks": true,
+  "managedClientJoined": true,
+  "managedClientClosed": true,
+  "consoleSay": true,
+  "flatStartupWithoutMissingLayers": true,
+  "vanillaWorld": {
+    "seed": "43551",
+    "generator": "minecraft:flat",
+    "gameMode": 1
+  },
+  "backupRestoreExactLevelData": true
+}

@@ -39,6 +39,20 @@ remaining gaps; full 1:1 client behavior is not established.
 
 ## One-file Windows launch
 
+For world and launch management, double-click **Manager.bat**. Its numbered menu
+creates vanilla worlds with chosen seeds and generation modes, switches worlds,
+backs up/restores saves, launches clients and opens the real server console.
+Enter `say hi`, `op username`, `list` or `stop` as on a normal Minecraft server.
+World changes require a stopped host; exiting the menu leaves an existing host
+running. [Manager instructions](docs/manager.md) include command-line options.
+
+Version **0.2.0-beta.1** adds Windows and server ZIP packages, optional Cloudflare
+HTTPS tunnels and a separate published Roblox place build. Quick tunnels are
+temporary test connections. A permanent domain uses a named tunnel and Roblox's
+secret store. See [deployment](docs/deployment.md), [content updates](docs/content.md)
+and the [changelog](CHANGELOG.md). Published Roblox runtime, asset permissions,
+remote load and native account linking still need validation; this is a beta.
+
 Double-click **Mineblox.bat**. It installs missing Node/Java and portable Roblox
 build tools, restores pinned dependencies, starts Minecraft and the loopback
 bridge, builds the private place and opens Studio. With Studio's MCP enabled,
@@ -46,7 +60,8 @@ Play starts automatically. The launcher reuses its managed Studio window and
 private loopback credential/port across restarts.
 Startup stops existing TCP listeners on Minecraft port 25565 and the saved bridge
 port before starting replacements. Cleanup targets only processes listening on
-those required ports.
+those required ports. A live Mineblox host lock prevents a second launcher from
+replacing a host that is already managing a world; stop it first.
 An expired Studio process record is ignored; an existing window for this place
 is reused when available. A stale Studio MCP connection is refreshed before
 installing scripts and starting Play.

@@ -1,5 +1,34 @@
 # Validation and benchmark baseline — 2026-10-06
 
+## Manager and hosting release checks — 2026-10-08
+
+All **59 unit tests**, the real TCP protocol integration fixture, JavaScript
+format/lint/syntax checks and Luau compile/invariant checks pass. Cloudflare API
+provisioning is covered by a fixture for zone ownership, DNS conflicts, retries
+and credential/error handling; it has not changed a real account.
+
+The [live manager proof](measurements/manager-release-2026-10-08.json) records an
+actual vanilla flat world with seed 43551 and creative mode, successful normal
+console `say` output, a backup restored with byte-identical `level.dat`, and a
+managed graphical client join/close. A second named client also joined through
+Quick Play using its separate game directory; closing it preserved the host.
+The original world was reselected and test services stopped with all dimensions
+saved. These are lifecycle checks, not remote movement/parity measurements.
+
+The [HTTPS tunnel check](measurements/https-tunnel-2026-10-08.json) reached the
+real gateway through a temporary Cloudflare hostname and confirmed HTTP 401
+without credentials. Minecraft stayed on loopback. The connector was stopped
+after the test. The [publication audit](measurements/publication-audit-2026-10-08.json)
+confirmed that the generated place omits the bearer and private pixel modules;
+the same conditions were verified in Studio through its official MCP. This does
+not establish a successful published Roblox join or licensed asset availability.
+
+[New microbenchmarks](measurements/microbenchmarks-2026-10-08.json) retain the same
+six-quad plane and 16,416-byte snapshot invariants. They ran alongside local
+launcher checks and are not a controlled performance comparison. Container,
+browser-auth/API-token live provisioning, public router/TLS and remote published
+Roblox runtime/load checks remain outstanding.
+
 ## Direct Minecraft client validation — 2026-10-08
 
 `Minecraft.bat` started the real local server and launched the official Java

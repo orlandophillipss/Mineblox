@@ -7,6 +7,7 @@ local function sprite(parent, image, size, position)
 	if not image then return nil end
 	local label = Instance.new("ImageLabel") label.BackgroundTransparency = 1 label.Size = size label.Position = position
 	label.ImageContent = Content.fromObject(image) label.ResampleMode = Enum.ResamplerMode.Pixelated label.Parent = parent
+	label:SetAttribute("MinebloxSprite",Images.guiNames[image])
 	return label
 end
 local function frame(parent, size, position, color)

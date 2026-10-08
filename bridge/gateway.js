@@ -14,6 +14,10 @@ export function createGateway({
   log = () => {},
   models = {},
   terrainRadius = 2,
+  requireOwner = false,
+  maxServers = 4,
+  maxSessionsPerServer = 16,
+  content = () => null,
 }) {
   if (
     typeof token !== 'string' ||
@@ -26,12 +30,14 @@ export function createGateway({
   if (!['127.0.0.1', '::1', 'localhost'].includes(minecraft.host))
     throw new Error('Offline development Minecraft target must be loopback');
   const sessions = new Map();
+  const owners = new Map();
+  const sessionOwners = new Map();
   const terrain = new TerrainService({ models, radius: terrainRadius });
   let terrainBusy = false;
   const identities = new Set();
   let shuttingDown = false;
-  // One authenticated Roblox server per gateway in v1. Fixed window bounds the
-  // total service load; a production gateway needs per-server/account quotas.
+  // Bound total authenticated load, with additional owner quotas in deployment
+  // mode. These limits are not a measured concurrent-player capacity claim.
   let windowStart = performance.now();
   let requests = 0;
   const expected = Buffer.from(`Bearer ${token}`);
@@ -59,6 +65,39 @@ export function createGateway({
         respond(200, { version: PROTOCOL_VERSION, sessions: sessions.size });
         return;
       }
+      let owner = 'local';
+      if (requireOwner) {
+        owner = req.headers['x-mineblox-server'];
+        if (typeof owner !== 'string' || !/^[A-Za-z0-9_-]{8,128}$/.test(owner))
+          throw new BridgeError(
+            'A valid Roblox server ownership header is required',
+            403,
+          );
+        let entry = owners.get(owner);
+        if (!entry) {
+          if (owners.size >= maxServers)
+            throw new BridgeError('Game server limit reached', 429);
+          entry = { window: started, requests: 0, lastSeen: started };
+          owners.set(owner, entry);
+        }
+        if (started - entry.window >= 60000) {
+          entry.window = started;
+          entry.requests = 0;
+        }
+        if (++entry.requests > 600)
+          throw new BridgeError('Game server request quota exceeded', 429);
+        entry.lastSeen = started;
+      }
+      const ownedPlayer = (id) => {
+        const player = sessions.get(id);
+        if (!player || (requireOwner && sessionOwners.get(id) !== owner))
+          throw new BridgeError('Unknown session', 404);
+        return player;
+      };
+      if (req.url === '/v1/content' && req.method === 'GET') {
+        respond(200, { version: 1, content: content() });
+        return;
+      }
       let body;
       if (['POST', 'PUT'].includes(req.method)) body = await readJson(req);
       if (body && body.version !== PROTOCOL_VERSION)
@@ -82,8 +121,7 @@ export function createGateway({
               )
             )
               throw new BridgeError('Invalid terrain player');
-            const player = sessions.get(request.id);
-            if (!player) throw new BridgeError('Unknown session', 404);
+            const player = ownedPlayer(request.id);
             worlds.push(await terrain.stream(player, request));
           }
           respond(200, { version: 1, worlds });
@@ -120,6 +158,12 @@ export function createGateway({
           throw new BridgeError('Minecraft name already connected', 409);
         if (sessions.size >= maxSessions)
           throw new BridgeError('Session limit reached', 429);
+        if (
+          requireOwner &&
+          [...sessionOwners.values()].filter((id) => id === owner).length >=
+            maxSessionsPerServer
+        )
+          throw new BridgeError('Game server session quota exceeded', 429);
         const player = new VirtualPlayer({
           robloxId: body.robloxId,
           username: body.username,
@@ -130,9 +174,11 @@ export function createGateway({
         });
         identities.add(player.robloxId);
         sessions.set(player.id, player);
+        sessionOwners.set(player.id, owner);
         player.once('closed', () => {
           sessions.delete(player.id);
           identities.delete(player.robloxId);
+          sessionOwners.delete(player.id);
         });
         await player.ready(spawnTimeoutMs);
         respond(201, player.snapshot());
@@ -154,8 +200,7 @@ export function createGateway({
               )
             )
               throw new BridgeError('Invalid exchange input');
-            const player = sessions.get(input.id);
-            if (!player) throw new BridgeError('Unknown session', 404);
+            const player = ownedPlayer(input.id);
             const ack = player.apply(input.frame);
             if (input.actions !== undefined) {
               if (!Array.isArray(input.actions) || input.actions.length > 4)
@@ -194,8 +239,8 @@ export function createGateway({
       }
       const match =
         /^\/v1\/sessions\/([0-9a-f-]{36})(?:\/(input|state))?$/.exec(req.url);
-      const player = match && sessions.get(match[1]);
-      if (!player) throw new BridgeError('Not found', 404);
+      if (!match) throw new BridgeError('Not found', 404);
+      const player = ownedPlayer(match[1]);
       if (match[2] === 'input' && req.method === 'PUT') {
         const ack = player.apply(body);
         respond(200, { ...player.snapshot(), ...ack });
@@ -224,8 +269,16 @@ export function createGateway({
   });
   server.requestTimeout = 20000;
   server.headersTimeout = 10000;
+  server.keepAliveTimeout = 5000;
+  server.maxRequestsPerSocket = 100;
   const maintenance = setInterval(() => {
     for (const player of sessions.values()) player.maintain();
+    for (const [id, owner] of owners)
+      if (
+        performance.now() - owner.lastSeen > 60000 &&
+        ![...sessionOwners.values()].includes(id)
+      )
+        owners.delete(id);
   }, 100);
   maintenance.unref();
   return {

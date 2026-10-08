@@ -6,7 +6,7 @@ local Transport = require(script.Parent.BridgeTransport)
 local config = require(script.Parent.DevelopmentConfig)
 Players.CharacterAutoLoads = false
 assert(HttpService.HttpEnabled, "Enable HTTP requests in Game Settings > Security")
-local secret = RunService:IsStudio() and config.token or HttpService:GetSecret("MINEBLOX_TOKEN")
+local secret = RunService:IsStudio() and not config.published and config.token or HttpService:GetSecret("MINEBLOX_TOKEN")
 local bridge = Transport.new(config.url, secret)
 local folder = Instance.new("Folder")
 folder.Name = "MinebloxNet"
@@ -18,6 +18,25 @@ local function remote(name)
 	return event
 end
 local input, state, terrain, status = remote("Input"), remote("State"), remote("Terrain"), remote("Status")
+local contentEvent=remote("Content")
+local contentAck=remote("ContentAck")
+local contentVersion=nil
+local publishedContent=nil
+contentAck.OnServerEvent:Connect(function(player,version)
+	local session=bridge.sessions[player.UserId]
+	if session and version==contentVersion and session.contentVersion~=version then session.contentVersion=version session.known={} end
+end)
+task.spawn(function()
+  while true do
+    if config.published then
+      local ok,result=pcall(bridge.request,bridge,"GET","/v1/content")
+      if ok and result.content and result.content.version~=contentVersion then
+        publishedContent=result.content contentVersion=result.content.version contentEvent:FireAllClients(publishedContent)
+      end
+    end
+    task.wait(60)
+  end
+end)
 local terrainAck = remote("TerrainAck")
 local action = remote("Action")
 local actionRate={}
@@ -40,6 +59,7 @@ local function join(player)
 	joining[player] = nil
 	if not player.Parent then if ok then pcall(bridge.leave, bridge, player) end return end
 	if ok then state:FireClient(player, result) else status:FireClient(player, "Connection failed; retrying in 20 seconds") warn("Mineblox join:", result) end
+	if ok and publishedContent then task.delay(2,function()if player.Parent then contentEvent:FireClient(player,publishedContent) end end) end
 end
 Players.PlayerAdded:Connect(function(player) task.spawn(join, player) end)
 for _, player in ipairs(Players:GetPlayers()) do task.spawn(join, player) end

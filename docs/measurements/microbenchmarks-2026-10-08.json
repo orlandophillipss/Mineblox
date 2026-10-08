@@ -1,0 +1,61 @@
+{
+  "date": "2026-10-08T18:35:35.291Z",
+  "node": "v24.16.0",
+  "platform": "win32",
+  "arch": "x64",
+  "cpu": "AMD Ryzen 7 9800X3D 8-Core Processor           ",
+  "results": [
+    {
+      "name": "snapshot encode 16^3",
+      "iterationsPerSample": 1000,
+      "samples": 7,
+      "medianUs": 29.55000000000001,
+      "minUs": 27.915799999999987,
+      "maxUs": 32.84530000000001
+    },
+    {
+      "name": "snapshot decode 16^3",
+      "iterationsPerSample": 1000,
+      "samples": 7,
+      "medianUs": 14.536999999999978,
+      "minUs": 12.153900000000021,
+      "maxUs": 25.016899999999993
+    },
+    {
+      "name": "greedy mesh solid 16^3",
+      "iterationsPerSample": 50,
+      "samples": 7,
+      "medianUs": 1176.9819999999993,
+      "minUs": 1113.087999999998,
+      "maxUs": 1289.5280000000014
+    },
+    {
+      "name": "greedy mesh plane 64x1x64",
+      "iterationsPerSample": 50,
+      "samples": 7,
+      "medianUs": 1155.308,
+      "minUs": 1081.504,
+      "maxUs": 1287.6420000000007
+    },
+    {
+      "name": "input validation",
+      "iterationsPerSample": 10000,
+      "samples": 7,
+      "medianUs": 0.05080000000000382,
+      "minUs": 0.025559999999995853,
+      "maxUs": 0.14984999999999218
+    },
+    {
+      "name": "single-voxel delta",
+      "iterationsPerSample": 1000,
+      "samples": 7,
+      "medianUs": 0.05590000000006512,
+      "minUs": 0.04680000000007567,
+      "maxUs": 0.2702999999999065
+    }
+  ],
+  "snapshotBytes": 16416,
+  "voxelStorageBytes": 16384,
+  "planeQuads": 6,
+  "note": "Local microbenchmarks; no network RTT, server TPS, Roblox FPS, total heap per chunk, or session scaling claims."
+}

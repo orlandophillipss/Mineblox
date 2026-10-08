@@ -1,6 +1,6 @@
 {
   "name": "mineblox",
-  "version": "0.1.0",
+  "version": "0.2.0-beta.1",
   "private": true,
   "description": "Minecraft-authoritative protocol bridge for Roblox frontends",
   "type": "module",
@@ -9,6 +9,8 @@
     "node": ">=24"
   },
   "scripts": {
+    "manager": "node tools/manager.js",
+    "release:zip": "node tools/release.js",
     "dev": "node --env-file-if-exists=.env bridge/main.js",
     "player": "node --env-file-if-exists=.env tools/player.js",
     "build": "node tools/check.js",

@@ -1,4 +1,4 @@
-param([switch]$MinecraftAssets, [switch]$ImportAudio, [switch]$MinecraftClient, [switch]$ClientOnly, [string]$MinecraftName = 'MinebloxJava')
+param([switch]$MinecraftAssets, [switch]$ImportAudio, [switch]$MinecraftClient, [switch]$ClientOnly, [switch]$Manager, [string]$MinecraftName = 'MinebloxJava')
 $ErrorActionPreference = 'Stop'
 if (($MinecraftClient -or $ClientOnly) -and $MinecraftName -cnotmatch '^[A-Za-z0-9_]{3,16}$') { throw 'MinecraftName must contain 3-16 letters, numbers or underscores' }
 $workspace = Split-Path -Parent $PSScriptRoot
@@ -32,7 +32,7 @@ if ($javaVersion -notmatch 'version "(2[1-9]|[3-9][0-9])') {
     Expand-Archive -LiteralPath '.local/tools/java.zip' -DestinationPath '.local/tools/java' -Force
     $env:MINEBLOX_JAVA = (Get-ChildItem -LiteralPath '.local/tools/java' -Filter java.exe -Recurse | Select-Object -First 1).FullName
 }
-if ($MinecraftClient -or $ClientOnly) {
+if ($MinecraftClient -or $ClientOnly -or $Manager) {
     $clientRuntime = Get-ChildItem -LiteralPath '.local/tools/java21' -Filter javaw.exe -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
     if (-not $clientRuntime) {
         Write-Output 'Installing the Minecraft client Java 21 runtime…'
@@ -60,7 +60,9 @@ if ($ImportAudio) {
 }
 if ($MinecraftAssets) { & node tools/prepare-roblox-assets.js --remote } else { & node tools/prepare-roblox-assets.js }
 if ($LASTEXITCODE -ne 0) { throw 'Asset preparation failed' }
-if ($ClientOnly) {
+if ($Manager) {
+    & node tools/manager.js
+} elseif ($ClientOnly) {
     & node tools/native-client.js --ensure-server --username $MinecraftName --stay-open
 } else {
     $launchArgs = @('tools/launcher.js')
