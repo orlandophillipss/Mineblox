@@ -89,14 +89,17 @@ parentPort.on('message', ({ id, origin, data, palette, neighbors = {} }) => {
                 }
                 const u = (axis + 1) % 3,
                   v = (axis + 2) % 3;
-                const at = [origin[0] + x, origin[1] + y, origin[2] + z].map(
-                  (n, i) => n + shape[i],
-                );
-                at[axis] += sign === 1 ? shape[axis + 3] - shape[axis] : 0;
+                const faceOrigin = [
+                  origin[0] + x,
+                  origin[1] + y,
+                  origin[2] + z,
+                ].map((n, i) => n + shape[i]);
+                faceOrigin[axis] +=
+                  sign === 1 ? shape[axis + 3] - shape[axis] : 0;
                 quads.push({
                   axis,
                   sign,
-                  origin: at,
+                  origin: faceOrigin,
                   width: shape[u + 3] - shape[u],
                   height: shape[v + 3] - shape[v],
                   key: String(p.state),

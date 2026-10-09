@@ -14,6 +14,13 @@ comparison. Fixed-size meshes, cooperative upload work, allocation retries and
 the maximum 16-face degraded preview remain required. GPU sampling/device parity
 is not established by setting SurfaceAppearance.ResampleMode.Pixelated.
 
+The October 9 Studio forest check exposed black cutout pixels with the depth-only
+alpha path. Cutout batches now use MeshPart transparency 0.02, the documented
+soft-alpha path, retaining vertex tint and the shared atlas. Water remains 0.25
+and opaque batches remain opaque. Soft blending has sorting/occlusion tradeoffs;
+this local fix does not establish mobile or published-client rendering parity.
+See [SurfaceAppearance alpha modes](https://create.roblox.com/docs/reference/engine/classes/SurfaceAppearance#AlphaMode).
+
 Canonical terrain uses negotiated `state-adaptive-xzy-v2`: uniform state, RLE or
 512 u32 states. The client decodes into a number or a compact buffer. Legacy
 requests still receive arrays. Revision/epoch checks and snapshot recovery remain.

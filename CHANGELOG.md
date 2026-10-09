@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.2.0-beta.5 — 2026-10-09
+
+- Fixed terrain HTTP 500 responses when a streamed partition contains water or
+  lava: a face-origin variable shadowed the neighbor lookup before initialization.
+- Added real worker regressions for water/lava source, flowing and falling levels,
+  including fluid and opaque neighbors across partition boundaries.
+- Fixed black holes in leaf textures on the tested Studio build by using Roblox's
+  soft-alpha rendering path for cutout atlas batches. Water keeps its existing
+  transparency. This path has transparency sorting tradeoffs; device checks remain.
+- Verified fresh forest streaming and textures in the local Studio playtest.
+  Upgrade the place/client and restart the bridge together; private assets and
+  existing worlds are preserved.
+
 ## 0.2.0-beta.4 — 2026-10-09
 
 - Fixed the manager reporting stopped while a standalone launcher holds the

@@ -129,7 +129,9 @@ function Renderer:partition(partition)
 					local appearance=AssetService:CreateSurfaceAppearanceAsync({ColorMap=Content.fromObject(batch.image)})
 					appearance.AlphaMode=batch.alpha and Enum.AlphaMode.Transparency or Enum.AlphaMode.Overlay appearance.ResampleMode=Enum.ResamplerMode.Pixelated appearance.Color=batch.tint appearance.Parent=part
 				end
-				if batch.water then part.Transparency=.25 end
+				-- The depth-only alpha path displayed black leaf holes in this Studio
+				-- build. Roblox's documented soft-alpha path preserves atlas cutouts.
+				if batch.water then part.Transparency=.25 elseif batch.alpha then part.Transparency=.02 end
 				part.Parent = group
 			end
 		end)

@@ -71,6 +71,30 @@ The benchmark rejects degraded geometry and a jump that did not execute. Raw
 camera samples stay in `.local`; sanitized summaries are in
 [client-bugfix-2026-10-08.json](measurements/client-bugfix-2026-10-08.json).
 
+## October 9 texture/terrain hotfix validation
+
+The user's forest HTTP 500 was a worker exception, `Cannot access 'at' before
+initialization`, on water/lava faces. The face-origin variable shadowed the
+neighbor lookup. A real worker regression now covers both fluids at levels 0,
+7 and 8, exposed heights, fluid above and fluid/opaque partition neighbors.
+All 84 unit tests, two real TCP integration tests, formatting/lint/syntax and
+Luau compilation/client invariants passed.
+
+A fresh playtest against the saved vanilla world streamed 153 cached partitions,
+113 resident mesh parts and 51,776 resident triangles, with no degraded meshes,
+no untextured visible groups and an empty render queue. The last 1,000 bridge log
+rows contained 998 successful HTTP requests (997 status 200, one status 201),
+and no request errors. These are local observations, not a WAN/load benchmark.
+
+The Studio cutout comparison showed black holes at MeshPart transparency 0 and
+visible leaf gaps at 0.02, retaining the same atlas and vertex tint. All 39 visible
+cutout parts used the corrected path after source sync and a fresh playtest.
+The stationary 2,400-frame sample had p95 5.61 ms and p99 6.43 ms; total Studio
+memory was about 2.93 GiB. No paired performance gain or device parity is claimed.
+Temporary diagnostic images/lights were removed, and world time was restored
+after the daylight visual comparison. Soft transparency can affect sorting and
+occlusion; full Minecraft light propagation remains unimplemented.
+
 ## Remaining work
 
 Recipe book, full creative categories, creative/spectator flight, effects/vehicles,

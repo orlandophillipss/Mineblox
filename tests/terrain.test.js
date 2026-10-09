@@ -47,6 +47,49 @@ test('high players keep loaded ground surface bands without scanning voxels or r
 import { VirtualPlayer } from '../bridge/session.js';
 import { fakeBot } from './helpers.js';
 
+test('the real terrain worker meshes water and lava levels and culls boundary neighbors', async (t) => {
+  const terrain = new TerrainService();
+  t.after(() => terrain.close());
+  for (const name of ['water', 'lava']) {
+    for (const [level, height] of [
+      [0, 8 / 9],
+      [7, 1 / 9],
+      [8, 8 / 9],
+    ]) {
+      const data = new Uint32Array(512);
+      data[448] = 1;
+      const palette = [
+        { state: 1, name, cube: false, shapes: [], properties: { level } },
+        { state: 2, name: 'stone', cube: true, opaque: true },
+      ];
+      const quads = await terrain.mesh({ origin: [-8, 64, 0], data, palette });
+      assert.equal(quads.length, 6);
+      assert.ok(quads.every((q) => q[7] === 1 && q.every(Number.isFinite)));
+      assert.equal(quads.find((q) => q[0] === 1 && q[1] === 1)[3], 71 + height);
+      const culled = await terrain.mesh({
+        origin: [-8, 64, 0],
+        data,
+        palette,
+        neighbors: { '-9,71,0': 1, '-8,71,-1': 2, '-8,72,0': 1 },
+      });
+      assert.equal(culled.length, 3);
+      assert.ok(
+        !culled.some(
+          (q) =>
+            (q[0] === 1 && q[1] === 1) ||
+            (q[0] === 0 && q[1] === -1) ||
+            (q[0] === 2 && q[1] === -1),
+        ),
+      );
+      assert.equal(
+        culled.find((q) => q[0] === 0)[6],
+        1,
+        'fluid above fills the side height',
+      );
+    }
+  }
+});
+
 function setup(t) {
   const bot = fakeBot();
   bot.entity.position = new Vec3(0, 64, 0);
