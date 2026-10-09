@@ -8,6 +8,14 @@ authentication/linking is not implemented in this release.
 
 ## Free temporary sharing
 
+The manager detects both managed hosts and standalone/native-launcher hosts.
+Option 9 or `Stop host` saves and stops a current launcher through a private,
+authenticated local pipe; option 6 can send normal console commands to either.
+Older live launchers without that control pipe are shown as running and need
+`stop` in their original terminal once. Never delete an active host lock to force
+a second process into the same world. Native client start/close controls require
+a managed launch. Reopen the manager after upgrading its code.
+
 Choose `quick` in Manager's launch menu, or run:
 
 ```sh

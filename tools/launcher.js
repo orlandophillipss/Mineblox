@@ -16,10 +16,14 @@ import { WorldStore } from './worlds.js';
 import { acquireHostLock } from './host-lock.js';
 import { startTunnel } from './tunnel.js';
 import { ContentStore } from '../bridge/content.js';
+import { createHostControl } from './host-control.js';
 
 const children = [];
 const contentStore = new ContentStore();
 let releaseLock;
+let hostControl,
+  hostReady = false;
+const consoleLines = [];
 let gateway,
   minecraft,
   nativeClient,
@@ -38,6 +42,11 @@ function launch(command, args, name, options = {}) {
   child.stdout?.pipe(output);
   child.stderr?.pipe(output);
   if (name === 'minecraft') {
+    child.stdout.on('data', (data) => {
+      for (const line of data.toString().slice(-32768).split(/\r?\n/))
+        if (line) consoleLines.push(line.slice(0, 1000));
+      consoleLines.splice(0, Math.max(0, consoleLines.length - 40));
+    });
     child.stdout?.pipe(process.stdout, { end: false });
     child.stderr?.pipe(process.stderr, { end: false });
   }
@@ -95,6 +104,7 @@ async function shutdown(code = 0) {
     if (nativeClient.exitCode === null && nativeClient.signalCode === null)
       nativeClient.kill();
   }
+  await hostControl?.close();
   await releaseLock?.();
   process.exit(code);
 }
@@ -128,6 +138,23 @@ try {
     nameIndex < 0 ? 'MinebloxJava' : process.argv[nameIndex + 1];
   if (process.argv.includes('--minecraft-client')) offlineUuid(nativeName);
   releaseLock = await acquireHostLock();
+  hostControl = await createHostControl({
+    status: () => ({
+      stopped: false,
+      profile: 'standalone',
+      hostPid: process.pid,
+      ready: hostReady,
+      stopping,
+      controllable: true,
+      clients: [],
+      console: consoleLines,
+    }),
+    console: (command) => {
+      if (!minecraft?.stdin.writable) throw new Error('Minecraft is not ready');
+      minecraft.stdin.write(command + '\n');
+    },
+    stop: () => void shutdown(),
+  });
   const world = await new WorldStore().active();
   await rm('.local/ready.json', { force: true });
   try {
@@ -301,6 +328,7 @@ try {
       ? 'READY — Local Minecraft server and bridge are running.'
       : 'READY — In Studio, press Play. WASD moves; Space jumps; Ctrl sprints; Shift sneaks; Tab releases the cursor.',
   );
+  hostReady = true;
   console.log(
     'Server console: say hi | op username | list | stop (save and close)',
   );

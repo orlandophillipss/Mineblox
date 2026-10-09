@@ -173,7 +173,19 @@ async function menu() {
       );
       console.log('12 List backups / restore');
       console.log('13 Hosting setup');
-      const choice = await rl.question('Choose: ');
+      const answer = (await rl.question('Choose: ')).trim().toLowerCase();
+      const aliases = {
+        stop: '9',
+        'stop host': '9',
+        launch: '4',
+        start: '4',
+        console: '6',
+        minecraft: '4',
+        server: '4',
+        studio: '4',
+        both: '4',
+      };
+      const choice = aliases[answer] ?? answer;
       try {
         if (choice === '0') break;
         if (choice === '13') await hostingMenu(rl);
@@ -199,9 +211,17 @@ async function menu() {
         } else if (choice === '3')
           console.log(await worlds.select(await rl.question('World ID: ')));
         else if (choice === '4') {
-          const profile = await rl.question(
-            'Launch server/studio/minecraft/both/quick/named/public [both]: ',
-          );
+          const profile = ['minecraft', 'server', 'studio', 'both'].includes(
+            answer,
+          )
+            ? answer
+            : (
+                await rl.question(
+                  'Launch server/studio/minecraft/both/quick/named/public [both]: ',
+                )
+              )
+                .trim()
+                .toLowerCase();
           console.log(await start(profile || 'both'));
         } else if (choice === '5') {
           console.table(running.clients);
@@ -227,6 +247,7 @@ async function menu() {
           console.log(await worlds.archive(await rl.question('World ID: ')));
         else if (choice === '9') {
           if (!running.stopped) console.log(await control({ action: 'stop' }));
+          else console.log('Host is already stopped');
         } else if (choice === '10')
           console.log(
             'Copy the token from this private file to Creator Hub Secret MINEBLOX_TOKEN: ' +
@@ -253,7 +274,10 @@ async function menu() {
               '# Accepted explicitly in Mineblox Manager\neula=true\n',
             );
           }
-        }
+        } else if (!['0', '13'].includes(choice))
+          console.log(
+            'Unknown option. Enter a menu number, launch, console or stop host.',
+          );
       } catch (error) {
         console.error(error.message);
       }

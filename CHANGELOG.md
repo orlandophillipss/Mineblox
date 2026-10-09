@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.2.0-beta.4 — 2026-10-09
+
+- Fixed the manager reporting stopped while a standalone launcher holds the
+  world lock. All new launchers expose authenticated local status, console and
+  save-and-stop controls, including servers started by the native client.
+- Added typed menu aliases including Stop host and launch profiles; unknown
+  input now receives a useful message instead of silently doing nothing.
+- Added real management-pipe, lock, authentication, bounds and interactive menu
+  regressions. Older live launchers are identified rather than having their
+  active locks deleted or their Minecraft processes forcibly terminated.
+
 ## 0.2.0-beta.3 — 2026-10-09
 
 - Fixed repeated HTTP 504 joins when a Minecraft player reconnects while dead.

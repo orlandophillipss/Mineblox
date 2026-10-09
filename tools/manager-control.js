@@ -2,6 +2,7 @@ import net from 'node:net';
 import path from 'node:path';
 import { readFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
+import { hostLockStatus } from './host-lock.js';
 export function managerPipe(workspace = process.cwd()) {
   const hash = createHash('sha256')
     .update(path.resolve(workspace))
@@ -11,15 +12,20 @@ export function managerPipe(workspace = process.cwd()) {
     ? `\\\\.\\pipe\\mineblox-${hash}`
     : path.resolve(workspace, '.local/manager.sock');
 }
-export async function control(request, workspace = process.cwd()) {
+export function hostPipe(workspace = process.cwd()) {
+  return managerPipe(workspace) + '-host';
+}
+async function requestControl(request, workspace, kind) {
   const record = JSON.parse(
-    await readFile(path.resolve(workspace, '.local/manager.json'), 'utf8'),
+    await readFile(path.resolve(workspace, `.local/${kind}.json`), 'utf8'),
   );
   const payload = JSON.stringify({ ...request, token: record.token }) + '\n';
   if (Buffer.byteLength(payload) > 2048)
     throw new Error('Manager command is too large');
   return new Promise((resolve, reject) => {
-    const socket = net.connect(managerPipe(workspace));
+    const socket = net.connect(
+      kind === 'manager' ? managerPipe(workspace) : hostPipe(workspace),
+    );
     let response = '';
     socket.setTimeout(20000, () =>
       socket.destroy(new Error('Manager request timed out')),
@@ -41,6 +47,37 @@ export async function control(request, workspace = process.cwd()) {
       }
     });
   });
+}
+export async function control(request, workspace = process.cwd()) {
+  const missing = (error) =>
+    ['ENOENT', 'ECONNREFUSED', 'EPIPE'].includes(error.code);
+  try {
+    return await requestControl(request, workspace, 'manager');
+  } catch (error) {
+    if (!missing(error)) throw error;
+  }
+  try {
+    return await requestControl(request, workspace, 'host-control');
+  } catch (error) {
+    if (!missing(error)) throw error;
+  }
+  const lock = await hostLockStatus(workspace);
+  if (request.action === 'status')
+    return lock
+      ? {
+          stopped: false,
+          profile: 'standalone (older launcher)',
+          hostPid: lock.pid,
+          ready: false,
+          controllable: false,
+          clients: [],
+        }
+      : { stopped: true, clients: [] };
+  if (lock)
+    throw new Error(
+      `Mineblox host ${lock.pid} uses an older launcher. Type stop in its original launch terminal to save and close it.`,
+    );
+  throw new Error('Host is stopped');
 }
 export function consoleCommand(value) {
   if (

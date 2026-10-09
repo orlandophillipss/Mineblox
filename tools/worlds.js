@@ -10,6 +10,7 @@ import {
 } from 'node:fs/promises';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
+import { hostLockStatus } from './host-lock.js';
 
 export function worldSpec(id, options = {}) {
   if (
@@ -116,22 +117,10 @@ export class WorldStore {
     return { ...spec, directory: await this.directory(spec) };
   }
   async assertStopped() {
-    try {
-      const lock = JSON.parse(
-        await readFile(path.join(this.root, 'host-lock.json'), 'utf8'),
-      );
-      try {
-        process.kill(lock.pid, 0);
-      } catch (error) {
-        if (error.code === 'ESRCH') return;
-        throw error;
-      }
+    if (await hostLockStatus(path.dirname(this.root)))
       throw new Error(
         'Stop the running host before changing or backing up worlds',
       );
-    } catch (error) {
-      if (error.code !== 'ENOENT') throw error;
-    }
   }
   async create(id, options = {}) {
     await this.assertStopped();
