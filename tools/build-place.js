@@ -67,7 +67,7 @@ export async function buildPlace({
         DevelopmentAssets: { $path: path.join(root, 'DevelopmentAssets.luau') },
       };
       for (const file of await readdir(root))
-        if (/^AssetPixels\d+\.luau$/.test(file))
+        if (/^Asset(?:Pixels|Models|Catalog)\d+\.luau$/.test(file))
           developmentAssets[file.replace('.luau', '')] = {
             $path: path.join(root, file),
           };
@@ -113,11 +113,20 @@ export async function buildPlace({
           AudioConfig: { $path: path.join(root, 'AudioConfig.luau') },
           Font: source('Font.luau'),
           World: source('World.luau'),
+          VoxelData: source('VoxelData.luau'),
           Prediction: source('Prediction.luau'),
+          Placement: source('Placement.luau'),
+          Inventory: source('Inventory.luau'),
+          Atlas: source('Atlas.luau'),
+          FaceTiles: source('FaceTiles.luau'),
+          Sprint: source('Sprint.luau'),
+          InputLatch: source('InputLatch.luau'),
+          Metrics: source('Metrics.luau'),
           Interface: source('Interface.luau'),
           Visibility: source('Visibility.luau'),
           Sounds: source('Sounds.luau'),
           Sky: source('Sky.luau'),
+          SkyAssets: source('SkyAssets.luau'),
           Interpolation: source('Interpolation.luau'),
           ...developmentAssets,
           Hud: source('Hud.luau'),

@@ -1,5 +1,15 @@
 # Versioned content updates
 
+Format 2 additionally accepts an `itemModels` map (maximum 256 entries inside the
+same 64 KiB manifest). Mesh definitions have at most 128 faces with bounded
+coordinates/UVs and named permitted texture references; sprite definitions have
+one named texture reference. Optional bounded GUI display transforms and a
+boolean `blockItem` flag are metadata, not executable code or stack outcomes.
+Format 1 remains accepted. The private 1,279-item development catalogue is not a
+redistributable public manifest. Large permitted packs need a future partitioned
+format rather than removing these bounds. See `bridge/content.js` and its fixture
+tests for the strict schema.
+
 Copy `content/catalog.example.json` to `.local/content/catalog.json` and populate
 it with image asset IDs you own or are permitted to use in the Roblox experience.
 The format uses named image keys, six block-face references in west/east/down/up/

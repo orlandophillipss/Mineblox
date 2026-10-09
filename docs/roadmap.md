@@ -28,17 +28,22 @@ complete Minecraft client parity or published crossplay.
 
 Exact executed live validation and measurements are in benchmarks.md.
 
+Phase 2's local bug fixes add compact voxel buffers, atlas/layer batches,
+1.21.4 item-model audits, serial drag transactions, real manual table crafting,
+held block controls and measured sprint/jump presentation. Details and remaining
+gaps are in [phase2-bugfixes.md](phase2-bugfixes.md).
+
 ## Experimental
 
-Published HTTPS transport, full blockstate/models, remote entity visuals and raw
-u32 voxel wire encoding remain experimental. Local Studio screenshots and a
+Published HTTPS transport, full blockstate/models, remote entity visuals and adaptive
+voxel wire encoding remain experimental. Local Studio screenshots and a
 Minecraft observer test are available; no production latency/scaling claim applies.
 
 ## Next three concrete tasks
 
-1. Full blockstate/multipart/plant/fluid visuals, rotated textures and biome/light handling.
-2. Latency distributions, frame-time measurements, repeated streaming and device/load tests.
-3. Extend container/item/entity coverage and repeat graphical Minecraft comparisons after the local GUI crash is resolved.
+1. Finish model uvlock/rescale, unsupported dynamic items, biome/light and fluid presentation.
+2. Repeat forest/device/multiplayer/WAN measurements against the recorded flat-world samples.
+3. Extend real container/recipe-book/flight/entity coverage and repeat native comparisons.
 
 ## Following vertical slices
 
@@ -51,7 +56,7 @@ complex End entities -> cooperative Ender Dragon benchmark.
 
 Published Roblox deployment requires a reachable authenticated HTTPS gateway.
 No online-mode Minecraft identity linking,
-Microsoft credentials, multi-game-server isolation or production asset rights
+Microsoft credentials, validated multi-server deployment or production asset rights
 resolution is provided. Go gateway adoption waits for measured need. Continuous
 shared production world cache, reliable event journals, exact movement/fluid
 prediction, complete entity/equipment rendering and all container interactions

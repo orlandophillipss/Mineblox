@@ -49,7 +49,8 @@ export class VirtualPlayer extends EventEmitter {
       ...minecraft,
       username: this.name,
       auth: 'offline',
-      viewDistance: 'tiny',
+      viewDistance: 'short',
+      respawn: false,
     });
     this.events = [];
     this.eventSeq = 0;
@@ -77,9 +78,16 @@ export class VirtualPlayer extends EventEmitter {
         collected: collected.id,
       }),
     );
-    this.bot.on('soundEffectHeard', (...args) =>
+    this.bot.on('soundEffectHeard', (name, position, volume, pitch) =>
       this.event('sound', {
-        name: String(args[0]?.soundName ?? args[0]).slice(0, 100),
+        name: String(name)
+          .replace(/^minecraft:/, '')
+          .slice(0, 100),
+        position: position
+          ? { x: position.x, y: position.y, z: position.z }
+          : null,
+        volume: Number.isFinite(volume) ? Math.max(0, Math.min(4, volume)) : 1,
+        pitch: Number.isFinite(pitch) ? Math.max(0.25, Math.min(4, pitch)) : 1,
       }),
     );
     this.bot.on('spawn', () => {
@@ -209,6 +217,8 @@ export class VirtualPlayer extends EventEmitter {
       acceptedSeq: this.seq,
       physicsTick: this.physicsTick,
       jumpTicks: this.bot.jumpTicks ?? 0,
+      inWater: this.bot.entity?.isInWater ?? false,
+      inLava: this.bot.entity?.isInLava ?? false,
       events: this.events.slice(-16),
       actions: this.actions.records.slice(-16),
       gameMode: this.bot.game?.gameMode ?? 'survival',
@@ -256,6 +266,7 @@ export class VirtualPlayer extends EventEmitter {
       health: this.bot.health ?? null,
       hunger: this.bot.food ?? null,
       timeOfDay: this.bot.time?.timeOfDay ?? null,
+      day: this.bot.time?.day ?? 0,
       selectedSlot: this.bot.quickBarSlot ?? 0,
       worldEpoch: this.worldEpoch,
       velocity: this.bot.entity?.velocity

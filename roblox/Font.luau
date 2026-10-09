@@ -25,7 +25,7 @@ function Font.attach(label)
 		local offset = label.TextXAlignment == Enum.TextXAlignment.Center and (label.AbsoluteSize.X-width)/2 or label.TextXAlignment == Enum.TextXAlignment.Right and label.AbsoluteSize.X-width or 0
 		local top = math.max(0,(label.AbsoluteSize.Y-data.height*scale)/2)
 		for _, entry in ipairs(glyphs) do
-			if entry.char ~= " " then for _, shadow in ipairs({true,false}) do
+			if entry.char ~= " " then for _, shadow in ipairs(label:GetAttribute("BitmapShadow")==false and {false} or {true,false}) do
 				used += 1
 				local g = entry.glyph local sprite = pool[used]
 				if not sprite then sprite = Instance.new("ImageLabel") pool[used] = sprite end
@@ -38,6 +38,7 @@ function Font.attach(label)
 		end
 	end
 	for _, key in ipairs({"Text","TextSize","TextColor3","AbsoluteSize","TextXAlignment"}) do label:GetPropertyChangedSignal(key):Connect(render) end
+	label:GetAttributeChangedSignal("BitmapShadow"):Connect(render)
 	render() return label
 end
 function Font.label(parent,text,size,position)

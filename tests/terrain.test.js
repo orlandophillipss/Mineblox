@@ -5,7 +5,45 @@ import {
   TerrainService,
   partitionKey,
   interestKeys,
+  surfaceHeights,
 } from '../bridge/terrain.js';
+test('high players keep loaded ground surface bands without scanning voxels or requesting camera terrain', () => {
+  let columns = 0;
+  const heights = surfaceHeights(
+    {
+      getColumn: () => {
+        columns++;
+        return {
+          minY: -64,
+          sections: [
+            { solidBlockCount: 4096 },
+            { solidBlockCount: 20 },
+            { solidBlockCount: 0 },
+          ],
+        };
+      },
+    },
+    { x: -0.5, y: 80, z: -0.5 },
+    4,
+  );
+  const keys = interestKeys(
+    { x: -0.5, y: 80, z: -0.5 },
+    { radius: 4, surfaceHeights: heights },
+  );
+  assert.ok(keys.includes('-1,-6,-1'));
+  assert.ok(keys.length <= 486);
+  assert.ok(columns <= 25);
+  assert.equal(new Set(keys).size, keys.length);
+  const ground = interestKeys(
+    { x: 0, y: -40, z: 0 },
+    { radius: 4, surfaceHeights: heights },
+  );
+  assert.equal(
+    ground.length,
+    243,
+    'ordinary grounded interest stays at its existing bound',
+  );
+});
 import { VirtualPlayer } from '../bridge/session.js';
 import { fakeBot } from './helpers.js';
 
@@ -51,10 +89,32 @@ test('interest is bounded and floor-correct across negative partition boundaries
   assert.equal(new Set(keys).size, 75);
   assert.equal(keys[0], '0,8,0');
 });
+test('terrain format negotiation preserves legacy clients and bounds adaptive snapshots', async (t) => {
+  const { terrain, player } = setup(t);
+  const legacy = await terrain.stream(player);
+  const compact = await terrain.stream(player, {
+    format: 'state-adaptive-xzy-v2',
+  });
+  assert.equal(compact.voxelFormat, 'state-adaptive-xzy-v2');
+  assert.deepEqual(
+    compact.partitions.map((p) => p.key),
+    legacy.partitions.map((p) => p.key),
+  );
+  assert.ok(
+    compact.partitions.every(
+      (p) => p.voxels === undefined && p.voxelData.encoding === 'uniform',
+    ),
+  );
+  assert.ok(JSON.stringify(compact).length < JSON.stringify(legacy).length / 2);
+  await assert.rejects(
+    terrain.stream(player, { format: 'bogus' }),
+    /Unsupported/,
+  );
+});
 test('stream revisions recover lost snapshots, invalidate block edits and reset dimension epochs', async (t) => {
   const { player, bot, terrain, change } = setup(t);
   const first = await terrain.stream(player);
-  assert.equal(first.partitions.length, 4);
+  assert.equal(first.partitions.length, 16);
   assert.ok(first.partitions.some((p) => p.quads.length === 1));
   const retry = await terrain.stream(player);
   assert.deepEqual(retry.partitions, first.partitions);
@@ -62,7 +122,7 @@ test('stream revisions recover lost snapshots, invalidate block edits and reset 
     first.partitions.map((p) => [p.key, p.revision]),
   );
   const next = await terrain.stream(player, { epoch: first.epoch, known });
-  assert.equal(next.partitions.length, 4);
+  assert.equal(next.partitions.length, 16);
   assert.ok(next.partitions.every((p) => !known[p.key]));
   change();
   const changed = await terrain.stream(player, { epoch: first.epoch, known });
@@ -78,7 +138,7 @@ test('stream revisions recover lost snapshots, invalidate block edits and reset 
   const respawn = await terrain.stream(player, { epoch: first.epoch, known });
   assert.equal(respawn.epoch, first.epoch + 1);
   assert.equal(respawn.dimension, 'the_nether');
-  assert.equal(respawn.partitions.length, 4);
+  assert.equal(respawn.partitions.length, 16);
   await assert.rejects(
     terrain.stream(player, { known: { invalid: 1 } }),
     /revisions/,
@@ -92,7 +152,7 @@ test('unloaded closest partitions do not starve loaded neighbors and cache stays
       ? null
       : original(p);
   const result = await terrain.stream(player);
-  assert.equal(result.partitions.length, 4);
+  assert.equal(result.partitions.length, 16);
   assert.ok(!result.partitions.some((p) => p.key === '0,8,0'));
   for (let i = 0; i < 25; i++) {
     bot.entity.position.x += 8;
@@ -101,4 +161,24 @@ test('unloaded closest partitions do not starve loaded neighbors and cache stays
   }
   player.close();
   assert.equal(terrain.players.size, 0);
+});
+
+test('a block change cancels only intersecting builds, while unrelated in-flight meshes survive', async (t) => {
+  const { terrain, player, bot } = setup(t);
+  const jobs = [];
+  terrain.mesh = () => new Promise((resolve) => jobs.push(resolve));
+  const state = terrain.state(player);
+  const near = terrain.partition(player, state, '0,7,0');
+  const far = terrain.partition(player, state, '2,7,0');
+  bot.emit('blockUpdate', null, { position: new Vec3(1, 63, 1) });
+  for (const resolve of jobs) resolve([]);
+  assert.equal(await near, null);
+  assert.ok(await far);
+  assert.ok(!state.cache.has('0,7,0'));
+  assert.ok(state.cache.has('2,7,0'));
+  const old = terrain.partition(player, state, '1,7,0');
+  bot.emit('spawn');
+  terrain.state(player);
+  jobs.at(-1)([]);
+  assert.equal(await old, null, 'old epoch cannot populate the new cache');
 });

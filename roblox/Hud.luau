@@ -31,7 +31,7 @@ local function label(parent, text, size, position, color)
 end
 function Hud.new(player)
 	local gui = Instance.new("ScreenGui")
-	gui.Name = "MinecraftHUD" gui.ResetOnSpawn = false gui.IgnoreGuiInset = true
+	gui.Name = "MinecraftHUD" gui.ResetOnSpawn = false gui.IgnoreGuiInset = true gui.ZIndexBehavior=Enum.ZIndexBehavior.Sibling
 	gui.Parent = player:WaitForChild("PlayerGui")
 	local root = frame(gui, UDim2.fromOffset(364, 100), UDim2.new(0.5, -182, 1, -100), Color3.new())
 	root.BackgroundTransparency = 1
@@ -47,39 +47,42 @@ function Hud.new(player)
 		slots[i] = { frame = slot, stroke = stroke, name = name, count = count, icon=icon,blockIcon=ItemVisual.icon(slot,UDim2.fromOffset(36,36),UDim2.fromOffset(2,2)) }
 		if Images.gui("hotbar") then slot.BackgroundTransparency = 1 stroke.Enabled = false end
 	end
+	local vitals=frame(root,UDim2.fromScale(1,1),UDim2.fromScale(0,0),Color3.new()) vitals.BackgroundTransparency=1
 	local hearts, hunger = {}, {}
 	local heartImages, foodImages = {}, {}
 	for i = 1, 10 do
-		hearts[i] = label(root, "♥", UDim2.fromOffset(18, 24), UDim2.fromOffset((i - 1) * 18, 18), Color3.fromRGB(224, 43, 43))
-		hunger[i] = label(root, "◆", UDim2.fromOffset(18, 24), UDim2.fromOffset(184 + (i - 1) * 18, 18), Color3.fromRGB(170, 112, 52))
-		sprite(root, Images.gui("heartEmpty"), UDim2.fromOffset(18,18),UDim2.fromOffset((i-1)*16,22))
-		sprite(root, Images.gui("foodEmpty"), UDim2.fromOffset(18,18),UDim2.fromOffset(202+(i-1)*16,22))
-		heartImages[i] = sprite(root, Images.gui("heartFull"), UDim2.fromOffset(18, 18), UDim2.fromOffset((i - 1) * 16, 22))
-		foodImages[i] = sprite(root, Images.gui("foodFull"), UDim2.fromOffset(18, 18), UDim2.fromOffset(202 + (i - 1) * 16, 22))
+		hearts[i] = label(vitals, "♥", UDim2.fromOffset(18, 24), UDim2.fromOffset((i - 1) * 18, 18), Color3.fromRGB(224, 43, 43))
+		hunger[i] = label(vitals, "◆", UDim2.fromOffset(18, 24), UDim2.fromOffset(184 + (i - 1) * 18, 18), Color3.fromRGB(170, 112, 52))
+		sprite(vitals, Images.gui("heartEmpty"), UDim2.fromOffset(18,18),UDim2.fromOffset((i-1)*16,22))
+		sprite(vitals, Images.gui("foodEmpty"), UDim2.fromOffset(18,18),UDim2.fromOffset(202+(i-1)*16,22))
+		heartImages[i] = sprite(vitals, Images.gui("heartFull"), UDim2.fromOffset(18, 18), UDim2.fromOffset((i - 1) * 16, 22))
+		foodImages[i] = sprite(vitals, Images.gui("foodFull"), UDim2.fromOffset(18, 18), UDim2.fromOffset(202 + (i - 1) * 16, 22))
 		if heartImages[i] then hearts[i].Visible = false end
 		if foodImages[i] then hunger[i].Visible = false end
 	end
-	local xpBack = frame(root, UDim2.fromOffset(364, 10), UDim2.fromOffset(0, 42), Color3.fromRGB(20, 35, 14))
+	local xpBack = frame(vitals, UDim2.fromOffset(364, 10), UDim2.fromOffset(0, 42), Color3.fromRGB(20, 35, 14))
 	local xp = frame(xpBack, UDim2.fromScale(0, 1), UDim2.fromScale(0, 0), Color3.fromRGB(127, 205, 45))
 	if sprite(xpBack, Images.gui("experienceBack"), UDim2.fromOffset(364, 10), UDim2.fromOffset(0, 0)) then
 		xpBack.Size = UDim2.fromOffset(364, 10)
 		xpBack.BackgroundTransparency = 1 xp.BackgroundTransparency = 1 xp.ClipsDescendants = true xp.Size = UDim2.fromScale(0, 2) xp.ZIndex = 2
 		local fill = sprite(xp, Images.gui("experienceFill"), UDim2.fromOffset(364, 10), UDim2.fromOffset(0, 0)) if fill then fill.ZIndex = 2 end
 	end
-	local level = label(root, "", UDim2.fromOffset(60, 22), UDim2.fromOffset(152, 27), Color3.fromRGB(130, 240, 70))
+	local level = label(vitals, "", UDim2.fromOffset(60, 22), UDim2.fromOffset(152, 27), Color3.fromRGB(130, 240, 70))
 	if not sprite(gui, Images.gui("crosshair"), UDim2.fromOffset(30, 30), UDim2.new(0.5, -15, 0.5, -15)) then
 		frame(gui, UDim2.fromOffset(18, 2), UDim2.new(0.5, -9, 0.5, -1), Color3.new(1, 1, 1))
 		frame(gui, UDim2.fromOffset(2, 18), UDim2.new(0.5, -1, 0.5, -9), Color3.new(1, 1, 1))
 	end
 	local selection = sprite(root, Images.gui("selection"), UDim2.fromOffset(48, 48), UDim2.fromOffset(-2, 54))
 	local info = label(gui, "Connecting to Minecraft…", UDim2.fromOffset(500, 30), UDim2.fromOffset(16, 16)) info.TextXAlignment = Enum.TextXAlignment.Left info.TextSize = 14
-	return setmetatable({ gui = gui, slots = slots, hearts = hearts, hunger = hunger, heartImages = heartImages, foodImages = foodImages, selection = selection, xp = xp, level = level, info = info }, Hud)
+	info.Visible=false
+	return setmetatable({ gui = gui, vitals=vitals, debug=false, slots = slots, hearts = hearts, hunger = hunger, heartImages = heartImages, foodImages = foodImages, selection = selection, xp = xp, level = level, info = info }, Hud)
 end
 function Hud:select(slot)
 	if self.selection then self.selection.Position = UDim2.fromOffset((slot - 1) * 40 - 2, 54) end
 	for i, item in ipairs(self.slots) do item.stroke.Color = i == slot and Color3.new(1, 1, 1) or Color3.fromRGB(135, 135, 135) item.stroke.Thickness = i == slot and 3 or 2 end
 end
 function Hud:update(state)
+	self.info.Visible=self.debug self.vitals.Visible=state.gameMode~="creative" and state.gameMode~="spectator"
 	for i = 1, 10 do
 		local heart = (state.health or 0) - (i - 1) * 2
 		local food = (state.hunger or 0) - (10 - i) * 2

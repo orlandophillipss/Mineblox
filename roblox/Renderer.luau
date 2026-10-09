@@ -1,6 +1,8 @@
 local AssetService = game:GetService("AssetService")
 local Images = require(script.Parent.Images)
 local Visibility=require(script.Parent.Visibility)
+local Atlas=require(script.Parent.Atlas)
+local FaceTiles=require(script.Parent.FaceTiles)
 local Renderer = {}
 Renderer.__index = Renderer
 local SCALE = 4
@@ -10,11 +12,15 @@ local function destroy(entry)
 end
 function Renderer.new()
 	local root = Instance.new("Folder") root.Name = "MinecraftTerrain" root.Parent = workspace
-	return setmetatable({ root = root, parts = {}, epoch = nil, meshAvailable = true, count = 0, triangles=0,visible=0 }, Renderer)
+	return setmetatable({ root = root, parts = {}, epoch = nil, meshAvailable = true, count = 0, triangles=0,visible=0,atlas=Atlas.new() }, Renderer)
 end
 function Renderer:clear()
 	for _, entry in pairs(self.parts) do destroy(entry) end
 	self.parts = {} self.count = 0
+	if self.catalog~=Images.assets then
+		for _,image in pairs(self.atlas.pages) do image:Destroy() end
+		self.atlas=Atlas.new() self.catalog=Images.assets
+	end
 end
 local function vertices(q,material)
 	if q[9] and material.modelFaces then
@@ -47,19 +53,22 @@ function Renderer:partition(partition)
 	local missing = {}
 	for _, q in ipairs(partition.quads) do
 		local material = palette[q[8]]
-		local image, key = Images.face(material.name, q[1], q[2], material.properties)
-		if q[9] and material.modelFaces then key=material.modelFaces[q[9]].texture image=Images.block(key) end
-		key = image and key or "substitute"
+		local key = Images.faceKey(material.name, q[1], q[2], material.properties)
+		if q[9] and material.modelFaces then key=material.modelFaces[q[9]].texture end
+		local cell=self.atlas:get(key) local image=cell and cell.image
+		local atlasKey=key
+		key = not image and "substitute" or ((material.name=="water" and "water" or cell.alpha and "cutout" or "opaque")..":"..cell.page)
 		if not image then missing[material.name] = true end
 		local tint=Color3.new(1,1,1)
 		if string.find(material.name,"leaves") or material.name=="fern" or material.name=="short_grass" or material.name=="grass_block" and q[1]==1 and q[2]==1 then tint=Color3.fromRGB(145,189,89) end
 		if material.name=="water" then tint=Color3.fromRGB(63,118,228) end
-		if not batches[key] then batches[key] = { image = image, key=key, tint=tint, water=material.name=="water", quads = {} } end
-		table.insert(batches[key].quads, q)
+		if not batches[key] then batches[key] = { image = image, key=key, alpha=cell and cell.alpha, tint=Color3.new(1,1,1), water=material.name=="water", quads = {} } end
+		FaceTiles.each(q,function(tile) table.insert(batches[key].quads,{quad=tile,cell=cell,key=atlasKey}) end)
 	end
 	local missingNames = {} for name in pairs(missing) do table.insert(missingNames, name) end table.sort(missingNames)
 	group:SetAttribute("UntexturedMaterials", table.concat(missingNames, ","))
 	local meshes, rendered = {}, false
+	local triangles=0
 	local started=os.clock() local buildStarted=started
 	if not self.meshAvailable and os.clock()>=(self.retryAt or 0) then self.meshAvailable=true end
 	if self.meshAvailable then
@@ -69,8 +78,15 @@ function Renderer:partition(partition)
 				local mesh = AssetService:CreateEditableMesh() assert(mesh, "EditableMesh allocation denied")
 				table.insert(meshes, mesh)
 				local low, high = Vector3.new(math.huge, math.huge, math.huge), Vector3.new(-math.huge, -math.huge, -math.huge)
-				for _, q in ipairs(batch.quads) do
+				for _, tile in ipairs(batch.quads) do
+					if os.clock()-started>.003 then task.wait() started=os.clock() end
+					local q=tile.quad
 					local points, uv = vertices(q,palette[q[8]])
+					if tile.cell then
+						local minU,minV=math.huge,math.huge for _,p in ipairs(uv) do minU=math.min(minU,p.X) minV=math.min(minV,p.Y) end
+						for i,p in ipairs(uv) do uv[i]=self.atlas:uv(tile.cell,p,minU,minV,q[9]~=nil) end
+					end
+					triangles+=2
 					local ids, uvIds = {}, {}
 					for i, p in ipairs(points) do
 						low = Vector3.new(math.min(low.X, p.X), math.min(low.Y, p.Y), math.min(low.Z, p.Z))
@@ -82,6 +98,10 @@ function Renderer:partition(partition)
 					if batch.image and (string.find(material.name, "leaves") or material.name == "grass_block" and q[1] == 1 and q[2] == 1) then color = Color3.fromRGB(145, 189, 89) end
 					if batch.image and material.name=="water" then color=Color3.fromRGB(63,118,228) end
 					if batch.image and (material.name=="fern" or material.name=="short_grass") then color=Color3.fromRGB(145,189,89) end
+					local axis,sign=q[1],q[2]
+					if q[9] then local normal=(points[2]-points[1]):Cross(points[3]-points[1]) if normal.Magnitude>0 then normal=normal.Unit local absolute=Vector3.new(math.abs(normal.X),math.abs(normal.Y),math.abs(normal.Z)) axis=absolute.Y>absolute.X and absolute.Y>absolute.Z and 1 or absolute.X>absolute.Z and 0 or 2 sign=axis==1 and normal.Y or axis==0 and normal.X or normal.Z end end
+					local shade=axis==1 and (sign>0 and 1 or .5) or axis==0 and .6 or .8
+					color=Color3.new(color.R*shade,color.G*shade,color.B*shade)
 					local colorId = mesh:AddColor(color, 1)
 					for _, triangle in ipairs({ {1, 2, 3}, {1, 3, 4} }) do
 						local a, b, c = triangle[1], triangle[2], triangle[3]
@@ -101,13 +121,13 @@ function Renderer:partition(partition)
 				mesh:Destroy()
 				mesh = fixed meshes[#meshes] = fixed
 				local part = AssetService:CreateMeshPartAsync(Content.fromObject(mesh))
-				part.Anchored = true part.CanCollide = false part.DoubleSided = true
+				part.Anchored = true part.CanCollide = false part.CanTouch=false part.CanQuery=false part.CastShadow=false part.DoubleSided = true
 				part.Material = Enum.Material.SmoothPlastic part.Color = Color3.new(1, 1, 1)
 				part.CFrame = CFrame.new(center)
 				if batch.image then part.TextureContent = Content.fromObject(batch.image) end
-				if Images.alpha[batch.key] then
+				if batch.image then
 					local appearance=AssetService:CreateSurfaceAppearanceAsync({ColorMap=Content.fromObject(batch.image)})
-					appearance.AlphaMode=Enum.AlphaMode.Transparency appearance.ResampleMode=Enum.ResamplerMode.Pixelated appearance.Color=batch.tint appearance.Parent=part
+					appearance.AlphaMode=batch.alpha and Enum.AlphaMode.Transparency or Enum.AlphaMode.Overlay appearance.ResampleMode=Enum.ResamplerMode.Pixelated appearance.Color=batch.tint appearance.Parent=part
 				end
 				if batch.water then part.Transparency=.25 end
 				part.Parent = group
@@ -115,7 +135,7 @@ function Renderer:partition(partition)
 		end)
 		if ok then rendered = true else
 			for _, mesh in ipairs(meshes) do mesh:Destroy() end meshes = {}
-			self.meshAvailable = false self.retryAt=os.clock()+30 group:ClearAllChildren() warn("Mineblox mesh fallback:", err)
+			self.meshAvailable = false self.retryAt=os.clock()+1 group:ClearAllChildren() warn("Mineblox mesh fallback:", err)
 		end
 	end
 	if not rendered then
@@ -134,8 +154,11 @@ function Renderer:partition(partition)
 			part.Color = Color3.fromRGB(table.unpack(palette[q[8]].color)) part.Parent = group
 		end
 	end
+	if previous and not rendered and not previous.degraded then
+		group:Destroy() previous.retryAt=os.clock()+1 previous.degraded=true return
+	end
 	if previous then destroy(previous) end
-	group.Parent = self.root self.parts[partition.key] = { group = group, revision = partition.revision, meshes = meshes, degraded=not rendered, retryAt=os.clock()+30, center=(Vector3.new(table.unpack(partition.origin))+Vector3.new(4,4,4))*SCALE,triangles=rendered and #partition.quads*2 or #group:GetChildren()*12,buildMs=(os.clock()-buildStarted)*1000 }
+	group.Parent = self.root self.parts[partition.key] = { group = group, revision = partition.revision, meshes = meshes, degraded=not rendered, retryAt=os.clock()+1, center=(Vector3.new(table.unpack(partition.origin))+Vector3.new(4,4,4))*SCALE,triangles=rendered and triangles or #group:GetChildren()*12,buildMs=(os.clock()-buildStarted)*1000 }
 end
 function Renderer:visibility(camera)
 	local visible,triangles=0,0

@@ -1,6 +1,7 @@
 import { Worker } from 'node:worker_threads';
 import { BridgeError } from './input.js';
 import { stateFaces } from './models.js';
+import { encodeVoxels } from './voxel-wire.js';
 
 const colors = {
   grass_block: [95, 149, 55],
@@ -16,7 +17,10 @@ export function partitionKey(position) {
     .map((n) => Math.floor(n / 8))
     .join(',');
 }
-export function interestKeys(position, { radius = 2, velocity } = {}) {
+export function interestKeys(
+  position,
+  { radius = 2, velocity, surfaceHeights, minY } = {},
+) {
   if (!Number.isInteger(radius) || radius < 2 || radius > 4)
     throw new Error('Invalid terrain radius');
   const [x, y, z] = partitionKey(position).split(',').map(Number);
@@ -40,7 +44,58 @@ export function interestKeys(position, { radius = 2, velocity } = {}) {
                 )
               : 0),
         });
+  const present = new Set(keys.map((p) => p.key));
+  for (let dz = -radius; dz <= radius; dz++)
+    for (let dx = -radius; dx <= radius; dx++) {
+      const height = surfaceHeights?.get(`${x + dx},${z + dz}`);
+      if (!Number.isInteger(height) || height + 16 > y * 8 - 8) continue;
+      const surfaceY = Math.floor(height / 8);
+      for (const sy of [surfaceY - 1, surfaceY, surfaceY + 1]) {
+        if (Number.isInteger(minY) && sy * 8 < minY) continue;
+        const key = `${x + dx},${sy},${z + dz}`;
+        if (present.has(key)) continue;
+        present.add(key);
+        keys.push({
+          key,
+          distance: dx * dx + dz * dz + 4 + Math.min(8, Math.abs(sy - y)),
+        });
+      }
+    }
   return keys.sort((a, b) => a.distance - b.distance).map((p) => p.key);
+}
+export function surfaceHeights(world, position, radius) {
+  const heights = new Map(),
+    columns = new Map();
+  const x = Math.floor(position.x / 8),
+    z = Math.floor(position.z / 8);
+  if (!world?.getColumn) return heights;
+  for (let dz = -radius; dz <= radius; dz++)
+    for (let dx = -radius; dx <= radius; dx++) {
+      const cx = Math.floor((x + dx) / 2),
+        cz = Math.floor((z + dz) / 2),
+        key = `${cx},${cz}`;
+      if (!columns.has(key)) {
+        const column = world.getColumn(cx, cz);
+        let height = null;
+        // The pinned Prismarine 1.21.4 sections store packet non-air counts. No
+        // voxel scan, generated height estimate, or camera request is involved.
+        if (
+          Number.isInteger(column?.minY) &&
+          Array.isArray(column.sections) &&
+          column.sections.length <= 64
+        ) {
+          for (let i = column.sections.length - 1; i >= 0; i--)
+            if (column.sections[i]?.solidBlockCount > 0) {
+              height = column.minY + i * 16;
+              break;
+            }
+        }
+        columns.set(key, height);
+      }
+      const height = columns.get(key);
+      if (height !== null) heights.set(`${x + dx},${z + dz}`, height);
+    }
+  return heights;
 }
 
 // One bounded worker queue prevents mesh work from blocking gameplay exchanges.
@@ -48,12 +103,13 @@ export class TerrainService {
   constructor({ models = {}, radius = 2 } = {}) {
     this.models = models;
     this.radius = radius;
-    this.maxPartitions = 3 * (radius * 2 + 1) ** 2;
+    this.maxPartitions = 6 * (radius * 2 + 1) ** 2;
     this.worker = null;
     this.pending = new Map();
     this.serial = 0;
     this.players = new Map();
     this.closed = false;
+    this.compact = new WeakMap();
   }
   mesh(payload) {
     if (this.closed) return Promise.reject(new Error('Terrain service closed'));
@@ -86,6 +142,7 @@ export class TerrainService {
         revision: 0,
         cache: new Map(),
         building: new Map(),
+        dirty: new Map(),
       };
       this.players.set(player.id, state);
       const invalidate = (oldBlock, block) => {
@@ -99,25 +156,38 @@ export class TerrainService {
           [0, -1, 0],
           [0, 0, 1],
           [0, 0, -1],
-        ])
-          state.cache.delete(
-            partitionKey({ x: p.x + dx, y: p.y + dy, z: p.z + dz }),
-          );
+        ]) {
+          const key = partitionKey({ x: p.x + dx, y: p.y + dy, z: p.z + dz });
+          state.cache.delete(key);
+          state.dirty.set(key, (state.dirty.get(key) ?? 0) + 1);
+        }
         state.revision++;
       };
       const reset = (point) => {
         if (point && Number.isFinite(point.x) && Number.isFinite(point.z)) {
-          for (const key of state.cache.keys()) {
+          for (const key of new Set([
+            ...state.cache.keys(),
+            ...state.building.keys(),
+          ])) {
             const [x, , z] = key.split(',').map((n) => Number(n) * 8);
             if (
               x >= point.x - 8 &&
               x < point.x + 24 &&
               z >= point.z - 8 &&
               z < point.z + 24
-            )
+            ) {
               state.cache.delete(key);
+              state.dirty.set(key, (state.dirty.get(key) ?? 0) + 1);
+            }
           }
-        } else state.cache.clear();
+        } else {
+          for (const key of new Set([
+            ...state.cache.keys(),
+            ...state.building.keys(),
+          ]))
+            state.dirty.set(key, (state.dirty.get(key) ?? 0) + 1);
+          state.cache.clear();
+        }
         state.revision++;
       };
       player.bot.on('blockUpdate', invalidate);
@@ -133,6 +203,7 @@ export class TerrainService {
     if (state.epoch !== player.worldEpoch) {
       state.epoch = player.worldEpoch;
       state.cache.clear();
+      state.dirty.clear();
       state.revision++;
     }
     return state;
@@ -141,6 +212,7 @@ export class TerrainService {
     if (state.cache.has(key)) return state.cache.get(key);
     if (state.building.has(key)) return state.building.get(key);
     const revision = state.revision,
+      dirty = state.dirty.get(key) ?? 0,
       epoch = state.epoch;
     const job = (async () => {
       const origin = key.split(',').map((n) => Number(n) * 8);
@@ -241,7 +313,7 @@ export class TerrainService {
         ),
       };
       if (
-        state.revision !== revision ||
+        (state.dirty.get(key) ?? 0) !== dirty ||
         state.epoch !== epoch ||
         player.worldEpoch !== epoch
       )
@@ -256,7 +328,12 @@ export class TerrainService {
       state.building.delete(key);
     }
   }
-  async stream(player, { known = {}, epoch } = {}) {
+  async stream(
+    player,
+    { known = {}, epoch, format = 'state-u32-xzy-v1' } = {},
+  ) {
+    if (!['state-u32-xzy-v1', 'state-adaptive-xzy-v2'].includes(format))
+      throw new BridgeError('Unsupported terrain format', 426);
     if (!player.bot.entity || player.status !== 'ready')
       throw new BridgeError('Player is not ready', 409);
     if (
@@ -276,22 +353,45 @@ export class TerrainService {
     const active = interestKeys(player.bot.entity.position, {
       radius: this.radius,
       velocity: player.bot.entity.velocity,
+      surfaceHeights: surfaceHeights(
+        player.bot.world,
+        player.bot.entity.position,
+        this.radius,
+      ),
+      minY: player.bot.game?.minY,
     });
     for (const k of state.cache.keys())
       if (!active.includes(k)) state.cache.delete(k);
+    for (const k of state.dirty.keys())
+      if (!active.includes(k) && !state.building.has(k)) state.dirty.delete(k);
     const partitions = [];
+    let bytes = 0;
     for (const key of active) {
       const cached = state.cache.get(key);
       if (cached && epoch === state.epoch && cached.revision === known[key])
         continue;
-      const partition = await this.partition(player, state, key);
-      if (partition) partitions.push(partition);
-      if (partitions.length === 4) break;
+      let partition = await this.partition(player, state, key);
+      if (partition && format === 'state-adaptive-xzy-v2') {
+        let compact = this.compact.get(partition);
+        if (!compact) {
+          const { voxels, ...geometry } = partition;
+          compact = { ...geometry, voxelData: encodeVoxels(voxels) };
+          this.compact.set(partition, compact);
+        }
+        partition = compact;
+      }
+      if (partition) {
+        const size = Buffer.byteLength(JSON.stringify(partition));
+        if (partitions.length && bytes + size > 768 * 1024) break;
+        partitions.push(partition);
+        bytes += size;
+      }
+      if (partitions.length === 16) break;
     }
     return {
       id: player.id,
       version: 1,
-      voxelFormat: 'state-u32-xzy-v1',
+      voxelFormat: format,
       minecraftVersion: '1.21.4',
       epoch: state.epoch,
       dimension: player.bot.game?.dimension,

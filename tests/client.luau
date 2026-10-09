@@ -30,6 +30,19 @@ assert(w:get(-1,0,0)==nil,"unknown negative coordinate")
 assert(w:ray({x=.5,y=.5,z=-1},{x=0,y=0,z=1},3).target[3]==0,"voxel targeting")
 w:apply({voxelFormat="state-u32-xzy-v1",minecraftVersion="1.21.4",epoch=2,active={},partitions={}}) assert(w:get(0,0,0)==nil,"epoch evicts cached collision data")
 print("Client prediction, acknowledgement, reconciliation, collision and world-cache invariants passed")
+local delayed=Prediction.new(world) delayed:reset({predicted={position={x=0,y=0,z=0},onGround=true},velocity=state().velocity})
+local authoritative=state() local expected=state() local inputs={}
+local apex,apexTick,landTick=0,0,0
+for tick=1,32 do
+	local input={controls=tick==1 and 16 or 0,yaw=0,seq=tick,clientTimeMs=tick*50} inputs[tick]=input
+	expected=Prediction.step(expected,input,world) delayed:input(input)
+	if tick>4 then authoritative=Prediction.step(authoritative,inputs[tick-4],world) end
+	if tick%4==0 then delayed:reconcile({stateSeq=tick,observedClientSeq=tick,presentationLeadTicks=4,predicted={position=authoritative.position,onGround=authoritative.onGround},velocity=authoritative.velocity,jumpTicks=authoritative.jumpTicks}) end
+	assert(math.abs(delayed.state.position.y-expected.position.y)<.000001,"accepted intentions cannot rewind vertical prediction before they are simulated")
+	if expected.position.y>apex then apex=expected.position.y apexTick=tick end
+	if tick>1 and landTick==0 and expected.onGround then landTick=tick end
+end
+assert(apex>1.24 and apex<1.26 and apexTick==6 and landTick==12,"ordinary jump has Minecraft height and timing, without vertical camera damping")
 local sample=Interpolation.sample({{time=0,position={x=0,y=0,z=0},yaw=0},{time=1,position={x=10,y=0,z=0},yaw=0,velocity={x=1,y=0,z=0}}},.5)
 assert(sample.x==5,"remote entity interpolation")
 sample=Interpolation.sample({{time=1,position={x=10,y=0,z=0},yaw=0,velocity={x=1,y=0,z=0}}},10)
@@ -38,3 +51,74 @@ assert(Visibility.sphere(0,0,-10,70,1.5,1,192),"forward sphere visible")
 assert(not Visibility.sphere(0,0,10,70,1.5,1,192),"behind-camera sphere culled")
 assert(Visibility.sphere(0,0,0,70,1.5,4,192),"near-plane intersection retained")
 assert(not Visibility.sphere(200,0,-10,70,1.5,1,192),"off-axis sphere culled")
+local Sprint=require("../roblox/Sprint") local sprintInput=Sprint.new()
+sprintInput:press(1) assert(not sprintInput:update(true,false,false,20),"single press walks")
+sprintInput:press(1.2) assert(sprintInput:update(true,false,false,20),"double tap latches sprint")
+assert(not sprintInput:update(false,false,false,20),"release cancels sprint")
+assert(sprintInput:update(true,true,false,20),"control sprint") assert(not sprintInput:update(true,true,true,20),"sneaking cancels sprint")
+assert(not sprintInput:update(true,true,false,6),"server hunger restricts sprint")
+local Tiles=require("../roblox/FaceTiles") local tiles={}
+Tiles.each({1,1,-8,64,0,8,8,1},function(q)table.insert(tiles,q)end)
+assert(#tiles==64,"atlas repeats large grass surfaces without stretching")
+for _,q in ipairs(tiles)do assert(q[6]==1 and q[7]==1 and q[3]>=-8 and q[3]<0 and q[5]>=0 and q[5]<8,"tile geometry preserves negative origins")end
+local VoxelData=require("../roblox/VoxelData")
+local packed=VoxelData.decode({voxelData={encoding="rle",runs={256,1,256,0}}},"state-adaptive-xzy-v2")
+assert(buffer.len(packed)==2048 and VoxelData.get(packed,255)==1 and VoxelData.get(packed,256)==0,"bounded RLE decode")
+assert(VoxelData.decode({voxelData={encoding="uniform",state=0}},"state-adaptive-xzy-v2")==0,"air stores one state")
+for _,runs in ipairs({{513,0},{511,0},{0,0,512,1},{512,-1},{512,0,1,1},{512.5,0}})do assert(not pcall(VoxelData.decode,{voxelData={encoding="rle",runs=runs}},"state-adaptive-xzy-v2"),"malformed terrain is rejected")end
+local rayQueries=0
+local dda=setmetatable({get=function(_,x,y,z)rayQueries+=1 return {name=z==-5 and "stone" or "air"}end},{__index=World})
+local target=dda:ray({x=.5,y=.5,z=.5},{x=0,y=0,z=-1},6)
+assert(target.target[3]==-5 and target.face[3]==1 and rayQueries==6,"DDA visits crossed voxels, not hundreds of fixed samples")
+local partial=setmetatable({get=function(_,x,y,z)
+	if z==0 and y==0 then return {name="stone_slab",shapes={{0,0,0,1,.5,1}}} end
+	return {name=z==-1 and y==0 and "stone" or "air",shapes=z==-1 and y==0 and {{0,0,0,1,1,1}} or {}}
+end},{__index=World})
+assert(partial:ray({x=.5,y=.75,z=2},{x=0,y=0,z=-1},4).target[3]==-1,"ray passes over a slab rather than selecting its empty upper half")
+local slab=partial:ray({x=.5,y=2,z=.5},{x=0,y=-1,z=0},4)
+assert(slab.face[2]==1 and slab.hit[2]==.5 and slab.distance==1.5,"slab targeting retains actual surface hit coordinates")
+local fluidWorld=setmetatable({get=function(_,x,y,z)
+	if y==0 then return {name="water",properties={level=x==0 and 0 or 4},shapes={}} end
+	return {name="air",shapes={}}
+end},{__index=World})
+local liquid,current=fluidWorld:fluid({x=.5,y=0,z=.5})
+assert(liquid=="water" and math.abs(current.x)<=.014,"source water occupancy and bounded current")
+local swim=state() swim.position.y=0
+fluidWorld.boxes=function()return {}end
+for _=1,10 do swim=Prediction.step(swim,{controls=16,yaw=0},fluidWorld)end
+assert(swim.position.y>0,"space gives immediate buoyancy")
+print("Sprint, atlas tiling, adaptive storage, DDA and liquid prediction invariants passed")
+local InputLatch=require("../roblox/InputLatch") local latch=InputLatch.new()
+latch:input(16,1) latch:input(0,1.12)
+local latched,pulsed=latch:controls(0,1.2) assert(latched==16 and pulsed,"short jump tap survives the 5 Hz exchange")
+latch:accepted(pulsed) assert(latch:controls(0,1.3)==0,"accepted jump is not replayed")
+latch:input(16,2) latch:input(0,2.1) assert(latch:controls(0,3)==0,"expired taps cannot move an idle player")
+local flight=Prediction.new(world) flight:reset(snapshot)
+flight.state=state() flight.history={}
+flight:input({controls=16,yaw=0,seq=1,clientTimeMs=50})
+local predictedY=flight.state.position.y
+flight:reconcile({stateSeq=99,observedClientSeq=1,predicted={position={x=0,y=0,z=0},onGround=true},velocity=state().velocity})
+assert(flight.state.position.y==predictedY,"delayed ordinary state cannot rewind a locally initiated jump")
+flight:reconcile({stateSeq=100,observedClientSeq=1,predicted={position={x=5,y=3,z=0},onGround=false},velocity=state().velocity,correction={revision=1}})
+assert(flight.state.position.y==3 and not flight.verticalFlight and #flight.history==0,"forced teleport immediately replaces vertical presentation")
+local Metrics=require("../roblox/Metrics") local metrics=Metrics.new(100)
+for _=1,99 do metrics:record(.01)end metrics:record(.1)
+local report=metrics:report()
+assert(report.samples==100 and report.p99Ms==10 and report.maxMs==100 and report.low1PercentFps==10,"frame tail metrics expose stalls")
+for _=1,100 do metrics:record(.02)end
+assert(metrics:report().samples==100 and metrics:report().maxMs==20,"metric memory is bounded and old stalls age out")
+local Inventory=require("../roblox/Inventory") local sent={}
+local inventory=Inventory.new(function(kind,data)table.insert(sent,{kind=kind,data=data})return #sent end)
+inventory:update({inventory={id=0,cursor=false},actions={}})
+inventory:press(36,0,0) inventory:release(9)
+assert(#sent==1 and inventory.active.seq==1,"drag release cannot overtake its pickup")
+inventory:update({inventory={id=0,cursor={name="stone",count=16}},actions={{seq=1,status="sent"}}})
+assert(#sent==2 and sent[2].data.slot==9 and inventory.state=="HOLDING_STACK","drop follows the acknowledged logical cursor")
+inventory:update({inventory={id=0,cursor=false},actions={{seq=2,status="sent"}}})
+assert(inventory.state=="EMPTY" and inventory.cursor==nil,"empty authoritative cursor retires its presentation")
+inventory:press(9,1,0) inventory:cancelDrag() inventory:close(0)
+inventory:update({inventory={id=1,cursor=false},actions={}})
+assert(inventory.drag==nil and #inventory.queue==0 and inventory.active==nil,"window changes cancel stale transactions")
+inventory:update({inventory={id=0,cursor={name="stone",count=12}},actions={}})
+inventory:press(9,0,0) inventory:visit(10) inventory:visit(11) inventory:release(11)
+assert(sent[#sent].kind=="distribute" and #sent[#sent].data.slots==3,"held stack drag delegates one bounded server distribution")

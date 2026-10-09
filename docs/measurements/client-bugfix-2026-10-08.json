@@ -1,0 +1,318 @@
+{
+  "date": "2026-10-08T22:53:57.725Z",
+  "environment": {
+    "minecraft": "1.21.4",
+    "fixture": "isolated superflat",
+    "studioInstances": 1
+  },
+  "samples": {
+    "walk": {
+      "measuredAt": "2026-10-08T21:43:23.347Z",
+      "motion": {
+        "backwardsFrames": 0,
+        "last": {
+          "y": -58.380001068115234,
+          "x": 12.5,
+          "fov": 70,
+          "z": -20.720739364624023,
+          "bridgeZ": -19.31529626949838,
+          "t": 5.0294976999994105,
+          "error": 0.2158591157105363,
+          "dt": 0.004680799786001444
+        },
+        "jumpHeight": 0,
+        "samples": 1207,
+        "movingFrames": 1198,
+        "first": {
+          "y": -58.380001068115234,
+          "x": 12.5,
+          "fov": 70,
+          "z": 0.5,
+          "bridgeZ": 0.5,
+          "t": 0.005486500000188244,
+          "error": 0,
+          "dt": 0.0057068997994065285
+        },
+        "maximumBlocksPerSecond": 8.635643636629075,
+        "meanForwardBlocksPerSecond": 4.271484226997866
+      },
+      "benchmark": {
+        "voxelFormat": "state-adaptive-xzy-v2",
+        "meshParts": 49,
+        "degraded": 0,
+        "residentTriangles": 12624,
+        "frames": {
+          "p95Ms": 5.482200067490339,
+          "low1PercentFps": 155.8070258880726,
+          "p50Ms": 4.314499907195568,
+          "averageFps": 240.00966519575502,
+          "maxMs": 7.239200174808502,
+          "samples": 2400,
+          "p99Ms": 6.06379983946681,
+          "meanMs": 4.166498874886504
+        },
+        "clientMemoryMb": 2779.81640625,
+        "buildWallP95Ms": 4.747299999507959,
+        "cached": 147,
+        "position": {
+          "y": -60,
+          "x": 12.499999999997026,
+          "z": -20.826310079472133
+        },
+        "queueDepth": 0,
+        "httpBytes": 3156155,
+        "epoch": 1,
+        "atlasCells": 7
+      }
+    },
+    "sprint": {
+      "measuredAt": "2026-10-08T22:41:32.607Z",
+      "motion": {
+        "backwardsFrames": 0,
+        "last": {
+          "y": -58.380001068115234,
+          "x": 24.5,
+          "fov": 79.99991607666016,
+          "z": -27.62311553955078,
+          "bridgeZ": -26.38235255204261,
+          "t": 5.028335700000753,
+          "error": 1.5631940186722204e-13,
+          "dt": 0.0031675000209361315
+        },
+        "jumpHeight": 0,
+        "samples": 1207,
+        "movingFrames": 1194,
+        "first": {
+          "y": -58.380001068115234,
+          "x": 24.5,
+          "fov": 70,
+          "z": 0.5,
+          "bridgeZ": 0.5,
+          "t": 0.0043194000027142465,
+          "error": 0,
+          "dt": 0.004625100176781416
+        },
+        "maximumBlocksPerSecond": 11.084340722862214,
+        "meanForwardBlocksPerSecond": 5.684716012538976
+      },
+      "benchmark": {
+        "voxelFormat": "state-adaptive-xzy-v2",
+        "meshParts": 49,
+        "degraded": 0,
+        "residentTriangles": 12464,
+        "frames": {
+          "p95Ms": 5.441800225526094,
+          "low1PercentFps": 150.38988510431673,
+          "p50Ms": 4.422199912369251,
+          "averageFps": 240.0521585277469,
+          "maxMs": 8.493199944496155,
+          "samples": 2400,
+          "p99Ms": 6.128900218755007,
+          "meanMs": 4.165761333424598
+        },
+        "clientMemoryMb": 3173.35546875,
+        "queueDepth": 0,
+        "buildWallP95Ms": 4.896899998129811,
+        "cached": 142,
+        "position": {
+          "y": -60,
+          "x": 24.49999999999621,
+          "z": -27.785436804161083
+        },
+        "httpBytes": 896360,
+        "itemTemplates": 2,
+        "epoch": 1,
+        "atlasCells": 8
+      }
+    },
+    "jump": {
+      "measuredAt": "2026-10-08T22:42:05.224Z",
+      "motion": {
+        "backwardsFrames": 0,
+        "last": {
+          "y": -58.380001068115234,
+          "x": 24.5,
+          "fov": 70.00007629394531,
+          "z": -27.837419509887695,
+          "bridgeZ": -27.83741987863372,
+          "t": 5.1489317000014125,
+          "error": 0,
+          "dt": 0.004644900094717741
+        },
+        "jumpHeight": 1.251953125,
+        "apexSeconds": 0.2919521000003442,
+        "samples": 1236,
+        "airborneSeconds": 0.592121199999383,
+        "movingFrames": 0,
+        "first": {
+          "y": -58.380001068115234,
+          "x": 24.5,
+          "fov": 70.00007629394531,
+          "z": -27.837419509887695,
+          "bridgeZ": -27.83741987863372,
+          "t": 0.002826600000844337,
+          "error": 0,
+          "dt": 0.002980499994009733
+        },
+        "maximumBlocksPerSecond": 0,
+        "meanForwardBlocksPerSecond": 0
+      },
+      "benchmark": {
+        "voxelFormat": "state-adaptive-xzy-v2",
+        "meshParts": 50,
+        "degraded": 0,
+        "residentTriangles": 12720,
+        "frames": {
+          "p95Ms": 5.525399930775166,
+          "low1PercentFps": 155.5924804111455,
+          "p50Ms": 4.319400060921907,
+          "averageFps": 240.01798941822642,
+          "maxMs": 7.389899808913469,
+          "samples": 2400,
+          "p99Ms": 6.1149001121521,
+          "meanMs": 4.16635437378621
+        },
+        "clientMemoryMb": 3171.99609375,
+        "queueDepth": 0,
+        "buildWallP95Ms": 4.896899998129811,
+        "cached": 147,
+        "position": {
+          "y": -60,
+          "x": 24.499999999996053,
+          "z": -27.83741987863372
+        },
+        "httpBytes": 1539577,
+        "itemTemplates": 2,
+        "epoch": 1,
+        "atlasCells": 8
+      },
+      "downwardFrameStepsOverPoint08": 0
+    },
+    "stationary": {
+      "measuredAt": "2026-10-08T22:49:56.244Z",
+      "motion": {
+        "backwardsFrames": 0,
+        "last": {
+          "y": -58.380001068115234,
+          "x": 24.5,
+          "fov": 70,
+          "z": -27.837419509887695,
+          "bridgeZ": -27.83741987863372,
+          "t": 5.028606299998501,
+          "error": 0,
+          "dt": 0.004855200182646513
+        },
+        "jumpHeight": 0,
+        "samples": 1207,
+        "movingFrames": 0,
+        "first": {
+          "y": -58.380001068115234,
+          "x": 24.5,
+          "fov": 70,
+          "z": -27.837419509887695,
+          "bridgeZ": -27.83741987863372,
+          "t": 0.004266699997970136,
+          "error": 0,
+          "dt": 0.004499299917370081
+        },
+        "maximumBlocksPerSecond": 0,
+        "meanForwardBlocksPerSecond": 0
+      },
+      "benchmark": {
+        "voxelFormat": "state-adaptive-xzy-v2",
+        "meshParts": 50,
+        "degraded": 0,
+        "residentTriangles": 12720,
+        "frames": {
+          "p95Ms": 5.486499983817339,
+          "low1PercentFps": 155.78993328567225,
+          "p50Ms": 4.320499952882528,
+          "averageFps": 240.06447912156557,
+          "maxMs": 7.326600141823292,
+          "samples": 2400,
+          "p99Ms": 6.076800171285868,
+          "meanMs": 4.165547538141254
+        },
+        "clientMemoryMb": 3253.765625,
+        "queueDepth": 0,
+        "buildWallP95Ms": 4.904400000668829,
+        "cached": 147,
+        "position": {
+          "y": -60,
+          "x": 24.499999999996053,
+          "z": -27.83741987863372
+        },
+        "httpBytes": 645087,
+        "itemTemplates": 2,
+        "epoch": 1,
+        "atlasCells": 8
+      }
+    }
+  },
+  "gameplay": {
+    "mining": {
+      "completed": [
+        {
+          "serverBlock": "air"
+        },
+        {
+          "serverBlock": "air"
+        },
+        {
+          "serverBlock": "air"
+        }
+      ],
+      "visibleCracksAfterRelease": 0
+    },
+    "placement": {
+      "completed": [
+        {
+          "serverBlock": "oak_planks"
+        },
+        {
+          "serverBlock": "oak_planks"
+        },
+        {
+          "serverBlock": "oak_planks"
+        },
+        {
+          "serverBlock": "oak_planks"
+        }
+      ],
+      "rejected": [
+        "Server refused to place oak_planks at (12, -59, 0): the block is still air"
+      ],
+      "remainingGhosts": 0
+    },
+    "catalog": {
+      "offset": 64,
+      "total": 1384,
+      "count": 64,
+      "templates": 118,
+      "unknown": 1,
+      "icons": 67
+    }
+  },
+  "limits": [
+    "Local controlled samples, not WAN/native parity guarantees",
+    "Studio total memory includes editor; not mobile client footprint",
+    "No paired old/new forest FPS comparison",
+    "Raw camera samples and all private game assets remain ignored"
+  ],
+  "shutdown": {
+    "status": [
+      {
+        "visible": true,
+        "text": "Minecraft disconnected. Waiting to reconnect..."
+      }
+    ],
+    "camera": [24.5, -58.380001068115234, -27.837419509887695],
+    "geometry": 0
+  },
+  "quality": {
+    "unitTests": 76,
+    "tcpIntegrationPassed": true,
+    "javascriptFormatLintSyntaxPassed": true,
+    "luauCompilationAndInvariantsPassed": true
+  }
+}

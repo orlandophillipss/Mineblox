@@ -96,11 +96,19 @@ the Minecraft player's position, never camera movement: default 75 partitions,
 voxels, nearest first. The cache is per session/world epoch and bounded to active
 interest. A session is bound to one Minecraft server and its current dimension.
 Each response carries version, session id, epoch, dimension, active keys and up
-to four full partition meshes per player. Quad arrays are
+to 16 full partition meshes per player within a 768 KiB payload bound. Quad arrays are
 `[axis, sign, x, y, z, width, height, stateId, optionalModelFaceIndex]`, with a
 material palette containing collision shapes and optional model face data.
 Each partition includes 512 canonical `voxels`, independent from its mesh.
-The terrain `voxelFormat` is `state-u32-xzy-v1` for pinned Minecraft 1.21.4.
+Legacy requests default to `state-u32-xzy-v1` for pinned Minecraft 1.21.4.
+Requests may explicitly select `format: "state-adaptive-xzy-v2"`; unknown formats
+return 426. In v2, `voxels` is `{encoding:"uniform",state}`, `{encoding:"rle",runs}`
+or `{encoding:"array",values}`. RLE is a flat `[count,state,...]` array totaling exactly
+512 cells; array values contain exactly 512 states. Both retain x/z/y order and unsigned
+32-bit state IDs. Decode every partition before mutating the world cache.
+Ordinary interest has three vertical bands; high players may additionally retain
+three loaded ground bands per column. Maximum interest is six bands (486 partitions
+at radius 4). This is bounded coverage, not full vertical terrain or distant LOD.
 
 `known` is a dictionary of successfully rendered revisions, not an acknowledgement
 of merely receiving a response. Omit it when empty: Roblox JSONEncode encodes an

@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.2.0-beta.2 — 2026-10-09
+
+- Fixed inventory cursor/drag coordinates, carried-stack cleanup, table slots,
+  fitted tooltips and player preview; removed Done and the local mode button.
+- Added audited 1.21.4 item-model icons, paginated Creative search and bounded
+  asynchronous item/mob templates. Unsupported special models remain explicit.
+- Added atlas material batching, adaptive voxel snapshots, stale worker job
+  cancellation and bounded loaded-ground interest for high players.
+- Fixed partial-block UVs, rotated cullfaces, quadruped body textures and the
+  heavy-core texture alias; expanded the private common blockstate catalogue.
+- Fixed sprint/jump presentation, short jump taps, held block actions, duplicate
+  placement ghosts and invalid dropped-item attacks that disconnected vanilla.
+- Removed default sky/post effects and direct solar glare; added original sky
+  gradients, projected block clouds, moon phases, F3 debug and offline status.
+- Added actual Studio camera benchmarks and isolated test-world console tooling.
+  See `docs/phase2-bugfixes.md` for measured results and incomplete features.
+- Upgrade client/place and bridge together. Existing worlds and private assets
+  remain in `.local`; back up the host before upgrading. This is a local beta,
+  not a complete or production-validated Minecraft implementation.
+
 ## 0.2.0-beta.1 — 2026-10-08
 
 - Hosting choices: Cloudflare API token provisioning with a preview, browser

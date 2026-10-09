@@ -43,6 +43,11 @@ try {
     ['ServerScriptService.BridgeTransport', 'roblox/BridgeTransport.luau'],
     ['ServerScriptService.MinebloxServer', 'roblox/Server.server.luau'],
     ['ReplicatedStorage.MinebloxClient.Renderer', 'roblox/Renderer.luau'],
+    ['ReplicatedStorage.MinebloxClient.Atlas', 'roblox/Atlas.luau'],
+    ['ReplicatedStorage.MinebloxClient.FaceTiles', 'roblox/FaceTiles.luau'],
+    ['ReplicatedStorage.MinebloxClient.Sprint', 'roblox/Sprint.luau'],
+    ['ReplicatedStorage.MinebloxClient.InputLatch', 'roblox/InputLatch.luau'],
+    ['ReplicatedStorage.MinebloxClient.Metrics', 'roblox/Metrics.luau'],
     ['ReplicatedStorage.MinebloxClient.Images', 'roblox/Images.luau'],
     ['ReplicatedStorage.MinebloxClient.ItemVisual', 'roblox/ItemVisual.luau'],
     [
@@ -55,11 +60,15 @@ try {
     ],
     ['ReplicatedStorage.MinebloxClient.Font', 'roblox/Font.luau'],
     ['ReplicatedStorage.MinebloxClient.World', 'roblox/World.luau'],
+    ['ReplicatedStorage.MinebloxClient.VoxelData', 'roblox/VoxelData.luau'],
     ['ReplicatedStorage.MinebloxClient.Prediction', 'roblox/Prediction.luau'],
+    ['ReplicatedStorage.MinebloxClient.Placement', 'roblox/Placement.luau'],
+    ['ReplicatedStorage.MinebloxClient.Inventory', 'roblox/Inventory.luau'],
     ['ReplicatedStorage.MinebloxClient.Interface', 'roblox/Interface.luau'],
     ['ReplicatedStorage.MinebloxClient.Visibility', 'roblox/Visibility.luau'],
     ['ReplicatedStorage.MinebloxClient.Sounds', 'roblox/Sounds.luau'],
     ['ReplicatedStorage.MinebloxClient.Sky', 'roblox/Sky.luau'],
+    ['ReplicatedStorage.MinebloxClient.SkyAssets', 'roblox/SkyAssets.luau'],
     [
       'ReplicatedStorage.MinebloxClient.Interpolation',
       'roblox/Interpolation.luau',
@@ -75,7 +84,7 @@ try {
     ],
   ];
   for (const file of await readdir('.local/roblox'))
-    if (/^AssetPixels\d+\.luau$/.test(file))
+    if (/^Asset(?:Pixels|Models|Catalog)\d+\.luau$/.test(file))
       scripts.unshift([
         `ReplicatedStorage.MinebloxClient.${file.replace('.luau', '')}`,
         `.local/roblox/${file}`,

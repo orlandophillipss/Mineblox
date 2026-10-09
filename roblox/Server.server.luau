@@ -84,7 +84,7 @@ terrainAck.OnServerEvent:Connect(function(player, epoch, known)
 	local validated = {}
 	for key, revision in pairs(known) do
 		count += 1
-		if count > 243 or type(key) ~= "string" or #key > 32 or not string.match(key, "^%-?%d+,%-?%d+,%-?%d+$") or type(revision) ~= "number" or revision % 1 ~= 0 or revision < 0 or revision > 4294967295 then return end
+		if count > 486 or type(key) ~= "string" or #key > 32 or not string.match(key, "^%-?%d+,%-?%d+,%-?%d+$") or type(revision) ~= "number" or revision % 1 ~= 0 or revision < 0 or revision > 4294967295 then return end
 		validated[key] = revision
 	end
 	session.known = validated

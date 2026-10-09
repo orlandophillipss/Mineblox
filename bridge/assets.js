@@ -9,7 +9,7 @@ const digest = (bytes) => createHash('sha256').update(bytes).digest('hex');
 function assetPath(value) {
   if (
     typeof value !== 'string' ||
-    !/^assets\/minecraft\/(models|blockstates|textures|font)\/[a-z0-9_/-]+\.(json|png|mcmeta)$/.test(
+    !/^assets\/minecraft\/(models|items|blockstates|textures|font)\/[a-z0-9_/-]+\.(json|png|mcmeta)$/.test(
       value,
     ) ||
     value.includes('//')
@@ -36,10 +36,19 @@ export class AssetStore {
     this.localRoot = localRoot && path.resolve(localRoot);
     this.allowRemote = allowRemote;
     this.fetch = fetchImpl;
+    this.pending = new Map();
   }
 
   async get(relative) {
     assetPath(relative);
+    if (this.pending.has(relative)) return this.pending.get(relative);
+    const operation = this.readAsset(relative).finally(() =>
+      this.pending.delete(relative),
+    );
+    this.pending.set(relative, operation);
+    return operation;
+  }
+  async readAsset(relative) {
     const file = path.join(this.cache, relative);
     try {
       const meta = JSON.parse(await readFile(`${file}.integrity.json`, 'utf8'));
@@ -111,6 +120,10 @@ export class AssetStore {
   }
 
   async model(name, chain = []) {
+    if (name === 'builtin/generated' || name === 'minecraft:builtin/generated')
+      return { generated: true, textures: {} };
+    if (name === 'builtin/entity' || name === 'minecraft:builtin/entity')
+      throw new Error('Special entity model requires an explicit renderer');
     if (
       !/^minecraft:[a-z0-9_/-]+$/.test(name) ||
       chain.includes(name) ||
@@ -130,11 +143,20 @@ export class AssetStore {
       ...parent,
       ...data,
       textures: { ...parent.textures, ...data.textures },
+      display: { ...parent.display, ...data.display },
     };
   }
 }
 
 export function resolveTexture(textures, name) {
+  // The pinned heavy_core model declares face texture "all" without '#'.
+  // Resolve an existing bare alias without treating arbitrary paths as aliases.
+  if (
+    typeof name === 'string' &&
+    !name.startsWith('#') &&
+    Object.hasOwn(textures, name)
+  )
+    name = '#' + name;
   const seen = new Set();
   while (name?.startsWith('#')) {
     if (seen.has(name) || seen.size >= 32)

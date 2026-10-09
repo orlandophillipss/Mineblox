@@ -135,9 +135,9 @@ runtime mesh/device constraints. Keep the Minecraft virtual player boundary inta
 
 Next three tasks:
 
-1. Extend blockstate variants, rotated logs, multipart/plant/fluid models and biome tint.
-2. Measure input/observer latency distributions, client frame times and repeated streaming under load.
-3. Extend validated block/inventory actions to full container/item/entity coverage and repeat graphical Minecraft comparisons.
+1. Finish uvlock/rescaled models, unsupported dynamic items, biome/light and fluid presentation. Keep the private audit explicit.
+2. Repeat forest/device/multiplayer/WAN measurements; local flat-world frame and sprint/jump samples are recorded in docs/phase2-bugfixes.md.
+3. Extend real container/recipe-book/flight/entity coverage and repeat native comparisons. Keep serial inventory transactions and bounded template/atlas work intact.
 
 Blockers for production: online authentication/account linking, HTTPS deployment,
 Roblox runtime validation, continuous terrain/cache streaming, entity/events,

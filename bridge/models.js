@@ -41,6 +41,19 @@ function rotate(p, axis, angle, center = [0.5, 0.5, 0.5]) {
   [out[u], out[v]] = [out[u] * cos - out[v] * sin, out[u] * sin + out[v] * cos];
   return out.map((n, i) => n + center[i]);
 }
+// Texture axes belong to the original face, before element/block rotation.
+// Inferred rectangles use its dimensions instead of stretching every slab face
+// across the complete texture. Explicit rectangles may reverse either axis.
+function texturePoint(name, [x, y, z]) {
+  return {
+    west: [z, 1 - y],
+    east: [1 - z, 1 - y],
+    north: [1 - x, 1 - y],
+    south: [x, 1 - y],
+    up: [x, z],
+    down: [x, 1 - z],
+  }[name];
+}
 export function modelFaces(model, variant = {}) {
   const result = [];
   for (const element of (model.elements ?? []).slice(0, 64))
@@ -63,6 +76,17 @@ export function modelFaces(model, variant = {}) {
         return p;
       });
       if (sign < 0) [points[1], points[3]] = [points[3], points[1]];
+      const metrics = points.map((p) => texturePoint(name, p));
+      const lowUv = [0, 1].map((i) => Math.min(...metrics.map((p) => p[i])));
+      const highUv = [0, 1].map((i) => Math.max(...metrics.map((p) => p[i])));
+      const uv = face.uv?.map((n) => n / 16) ?? [...lowUv, ...highUv];
+      const coords = metrics.map((p) => {
+        let u = (p[0] - lowUv[0]) / (highUv[0] - lowUv[0] || 1),
+          v = (p[1] - lowUv[1]) / (highUv[1] - lowUv[1] || 1);
+        // Sampling rotates oppositely to the visible clockwise texture.
+        for (let i = 0; i < (face.rotation ?? 0) / 90; i++) [u, v] = [v, 1 - u];
+        return [uv[0] + u * (uv[2] - uv[0]), uv[1] + v * (uv[3] - uv[1])];
+      });
       if (element.rotation) {
         const r = element.rotation,
           index = { x: 0, y: 1, z: 2 }[r.axis];
@@ -77,20 +101,25 @@ export function modelFaces(model, variant = {}) {
       }
       if (variant.x) points = points.map((p) => rotate(p, 0, -variant.x));
       if (variant.y) points = points.map((p) => rotate(p, 1, -variant.y));
-      const uv = face.uv ?? [0, 0, 16, 16];
-      let coords = [
-        [uv[0] / 16, uv[1] / 16],
-        [uv[2] / 16, uv[1] / 16],
-        [uv[2] / 16, uv[3] / 16],
-        [uv[0] / 16, uv[3] / 16],
-      ];
-      const turn = (face.rotation ?? 0) / 90;
-      coords = coords.map((_, i) => coords[(i + turn) % 4]);
+      let cullface = face.cullface ?? null;
+      if (cullface && directions[cullface]) {
+        const [caxis, csign] = directions[cullface];
+        let normal = [0, 0, 0];
+        normal[caxis] = csign;
+        if (variant.x) normal = rotate(normal, 0, -variant.x, [0, 0, 0]);
+        if (variant.y) normal = rotate(normal, 1, -variant.y, [0, 0, 0]);
+        cullface =
+          Object.keys(directions).find((key) => {
+            const [a, s] = directions[key];
+            return normal[a] * s > 0.999;
+          }) ?? null;
+      }
       result.push({
         points,
         uv: coords,
         texture: resolveTexture(model.textures, face.texture),
-        cullface: face.cullface ?? null,
+        cullface,
+        tintIndex: face.tintindex ?? -1,
       });
     }
   return result;

@@ -11,11 +11,11 @@ export const EMPTY_CONTENT = {
 export function validateContent(value) {
   if (
     !value ||
-    value.format !== 1 ||
+    ![1, 2].includes(value.format) ||
     typeof value.version !== 'string' ||
     !/^\d+\.\d+\.\d+(?:-[a-z0-9.-]+)?$/.test(value.version)
   )
-    throw new Error('Content requires format 1 and a semantic version');
+    throw new Error('Content requires format 1 or 2 and a semantic version');
   if (Buffer.byteLength(JSON.stringify(value)) > 65536)
     throw new Error('Content manifest exceeds 64 KiB');
   if (
@@ -29,6 +29,7 @@ export function validateContent(value) {
           'gui',
           'items',
           'entities',
+          ...(value.format === 2 ? ['itemModels'] : []),
         ].includes(key),
     )
   )
@@ -64,6 +65,105 @@ export function validateContent(value) {
   }
   for (const field of ['gui', 'items', 'entities'])
     for (const key of Object.values(value[field])) reference(key);
+  if (value.format === 2) {
+    if (
+      !value.itemModels ||
+      typeof value.itemModels !== 'object' ||
+      Array.isArray(value.itemModels) ||
+      Object.keys(value.itemModels).length > 256
+    )
+      throw new Error('Invalid item model map');
+    const vector = (v, min, max) =>
+      Array.isArray(v) &&
+      v.length === 3 &&
+      v.every((n) => Number.isFinite(n) && n >= min && n <= max);
+    for (const [name, model] of Object.entries(value.itemModels)) {
+      if (
+        !/^[a-z0-9_]{1,64}$/.test(name) ||
+        !model ||
+        Object.keys(model).some(
+          (k) =>
+            !['kind', 'texture', 'faces', 'display', 'blockItem'].includes(k),
+        ) ||
+        (model.blockItem !== undefined && typeof model.blockItem !== 'boolean')
+      )
+        throw new Error('Invalid item model');
+      if (model.kind === 'sprite') {
+        reference(model.texture);
+        if (model.faces !== undefined)
+          throw new Error('Sprite cannot contain geometry');
+      } else if (model.kind === 'mesh') {
+        if (
+          model.texture !== undefined ||
+          !Array.isArray(model.faces) ||
+          model.faces.length < 1 ||
+          model.faces.length > 128
+        )
+          throw new Error('Invalid item geometry');
+        for (const face of model.faces) {
+          if (
+            !face ||
+            Object.keys(face).some(
+              (k) => !['points', 'uv', 'texture', 'tint'].includes(k),
+            ) ||
+            !Array.isArray(face.points) ||
+            face.points.length !== 4 ||
+            face.points.some((v) => !vector(v, -4, 4)) ||
+            !Array.isArray(face.uv) ||
+            face.uv.length !== 4 ||
+            face.uv.some(
+              (v) =>
+                !Array.isArray(v) ||
+                v.length !== 2 ||
+                v.some((n) => !Number.isFinite(n) || n < -4 || n > 4),
+            ) ||
+            (face.tint !== undefined &&
+              (!vector(face.tint, 0, 255) ||
+                face.tint.some((n) => !Number.isInteger(n))))
+          )
+            throw new Error('Invalid item face');
+          reference(face.texture);
+        }
+      } else throw new Error('Unsupported item model kind');
+      if (model.display !== undefined) {
+        if (
+          !model.display ||
+          typeof model.display !== 'object' ||
+          Array.isArray(model.display) ||
+          Object.keys(model.display).length > 8
+        )
+          throw new Error('Invalid item display');
+        for (const [context, transform] of Object.entries(model.display)) {
+          if (
+            ![
+              'gui',
+              'ground',
+              'fixed',
+              'head',
+              'firstperson_lefthand',
+              'firstperson_righthand',
+              'thirdperson_lefthand',
+              'thirdperson_righthand',
+            ].includes(context) ||
+            !transform ||
+            Object.keys(transform).some(
+              (k) => !['rotation', 'translation', 'scale'].includes(k),
+            )
+          )
+            throw new Error('Invalid item display context');
+          if (
+            (transform.rotation !== undefined &&
+              !vector(transform.rotation, -360, 360)) ||
+            (transform.translation !== undefined &&
+              !vector(transform.translation, -80, 80)) ||
+            (transform.scale !== undefined &&
+              !vector(transform.scale, 0.0001, 8))
+          )
+            throw new Error('Invalid item display transform');
+        }
+      }
+    }
+  }
   return structuredClone(value);
 }
 export class ContentStore {

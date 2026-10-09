@@ -34,7 +34,23 @@ parentPort.on('message', ({ id, origin, data, palette, neighbors = {} }) => {
           const p = materials.get(region.get(x, y, z));
           if (!p || p.cube) continue;
           if (p.modelFaces?.length) {
-            for (let index = 0; index < p.modelFaces.length; index++)
+            for (let index = 0; index < p.modelFaces.length; index++) {
+              const direction = {
+                west: [-1, 0, 0],
+                east: [1, 0, 0],
+                down: [0, -1, 0],
+                up: [0, 1, 0],
+                north: [0, 0, -1],
+                south: [0, 0, 1],
+              }[p.modelFaces[index].cullface];
+              if (direction) {
+                const neighbor = at(
+                  x + direction[0],
+                  y + direction[1],
+                  z + direction[2],
+                );
+                if (neighbor?.cube && neighbor.opaque) continue;
+              }
               quads.push({
                 axis: 0,
                 sign: 1,
@@ -44,6 +60,7 @@ parentPort.on('message', ({ id, origin, data, palette, neighbors = {} }) => {
                 key: String(p.state),
                 faceIndex: index + 1,
               });
+            }
             continue;
           }
           const shapes = ['water', 'lava'].includes(p.name)

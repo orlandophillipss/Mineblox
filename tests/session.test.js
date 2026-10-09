@@ -6,6 +6,33 @@ import { fakeBot } from './helpers.js';
 import { Vec3 } from 'vec3';
 
 const frame = { version: 1, seq: 1, controls: 33, yaw: 0.5, pitch: 0.1 };
+test('virtual player disables automatic respawn and preserves bounded sound coordinates', () => {
+  const bot = fakeBot();
+  let options;
+  const player = new VirtualPlayer({
+    robloxId: '123',
+    minecraft: {},
+    createBot: (value) => {
+      options = value;
+      return bot;
+    },
+  });
+  assert.equal(options.respawn, false);
+  bot.emit(
+    'soundEffectHeard',
+    'minecraft:block.wooden_button.click_on',
+    new Vec3(1, 2, 3),
+    2,
+    0.8,
+  );
+  assert.deepEqual(player.events.at(-1).data, {
+    name: 'block.wooden_button.click_on',
+    position: { x: 1, y: 2, z: 3 },
+    volume: 2,
+    pitch: 0.8,
+  });
+  player.close();
+});
 function setup() {
   let time = 0;
   const bot = fakeBot();

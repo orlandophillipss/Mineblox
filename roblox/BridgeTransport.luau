@@ -2,6 +2,7 @@
 -- published games must use Roblox's secret store instead.
 local HttpService = game:GetService("HttpService")
 local RunService = game:GetService("RunService")
+local InputLatch=require(game.ReplicatedStorage.MinebloxClient.InputLatch)
 local Transport = {}
 Transport.__index = Transport
 
@@ -37,7 +38,7 @@ function Transport:join(player)
 	local identity = player.UserId
 	if RunService:IsStudio() and identity <= 0 then identity = 200000000000 + math.abs(identity) end
 	local state = self:request("POST", "/v1/sessions", { version = 1, robloxId = tostring(identity),username=player.Name,displayName=player.DisplayName })
-	self.sessions[player.UserId] = { id = state.id, seq = 0, sendSeq = 0, frame = nil, lastInput = 0, known = {}, epoch = state.worldEpoch, actions = {}, actionSeq = 0 }
+	self.sessions[player.UserId] = { id = state.id, seq = 0, sendSeq = 0, frame = nil, lastInput = 0, known = {}, epoch = state.worldEpoch, actions = {}, actionSeq = 0,latch=InputLatch.new() }
 	return state
 end
 
@@ -56,6 +57,7 @@ function Transport:setInput(player, frame)
 	if type(frame.clientTimeMs) ~= "number" or frame.clientTimeMs~=frame.clientTimeMs or frame.clientTimeMs<0 or frame.clientTimeMs>1e12 then return false end
 	-- Copy untrusted data; keep only the latest frame for each player.
 	session.seq = frame.seq
+	session.latch:input(frame.controls,os.clock())
 	session.frame = { version = 1, seq = frame.seq, controls = frame.controls, yaw = frame.yaw, pitch = frame.pitch, slot = frame.slot, clientTimeMs=frame.clientTimeMs }
 	session.lastInput = os.clock()
 	return true
@@ -79,8 +81,9 @@ function Transport:exchange()
 		local frame = session.frame or { controls = 0, yaw = 0, pitch = 0 }
 		session.sendSeq += 1
 		local actions={} for i=1,math.min(4,#session.actions) do actions[i]=session.actions[i] end
-		metadata[session.id]={clientSeq=frame.seq or 0,clientTimeMs=frame.clientTimeMs or 0,actions=actions,session=session}
-		table.insert(inputs, { id = session.id, actions=#actions>0 and actions or nil, frame = { version = 1, seq = session.sendSeq, controls = os.clock() - session.lastInput < 0.75 and frame.controls or 0, yaw = frame.yaw, pitch = frame.pitch, slot = frame.slot or 0 } })
+		local controls,pulsed=session.latch:controls(os.clock()-session.lastInput<.75 and frame.controls or 0,os.clock())
+		metadata[session.id]={clientSeq=frame.seq or 0,clientTimeMs=frame.clientTimeMs or 0,actions=actions,session=session,pulsed=pulsed}
+		table.insert(inputs, { id = session.id, actions=#actions>0 and actions or nil, frame = { version = 1, seq = session.sendSeq, controls = controls, yaw = frame.yaw, pitch = frame.pitch, slot = frame.slot or 0 } })
 	end
 	if #inputs == 0 then return { version = 1, states = {} } end
 	self.busy = true
@@ -91,7 +94,11 @@ function Transport:exchange()
 	for _,state in ipairs(result.states) do
 		local m=metadata[state.id]
 		if m and not state.error then
+			m.session.latch:accepted(m.pulsed)
 			state.observedClientSeq=m.clientSeq state.inputClientTimeMs=m.clientTimeMs state.stateSeq=self.stateSeq
+			-- The bridge applies held intentions every 200 ms. Acceptance is not
+			-- a physics acknowledgement; retain up to four local presentation ticks.
+			state.presentationLeadTicks=4
 			state.httpCount=self.httpCount state.httpBytes=self.httpBytes
 			m.session.epoch=state.worldEpoch
 			for _,a in ipairs(m.actions) do if m.session.actions[1] and m.session.actions[1].seq==a.seq then table.remove(m.session.actions,1) end end
@@ -115,7 +122,7 @@ function Transport:terrain()
 		local userId = users[self.cursor]
 		self.cursor += 1
 		local s = self.sessions[userId]
-		table.insert(requests, { id = s.id, known = next(s.known) and s.known or nil, epoch = s.epoch })
+		table.insert(requests, { id = s.id, known = next(s.known) and s.known or nil, epoch = s.epoch, format="state-adaptive-xzy-v2" })
 		selected[s.id] = { userId = userId, session = s }
 	end
 	if #requests == 0 then return {} end

@@ -1,5 +1,20 @@
 # Validation and benchmark baseline — 2026-10-06
 
+## Phase 2 client bug fixes — 2026-10-08
+
+See [executed client checks](phase2-bugfixes.md) and the
+[sanitized measurements](measurements/client-bugfix-2026-10-08.json).
+The controlled local flat-world sprint had no backwards camera frames; jump
+height was 1.252 blocks and airborne duration about 0.592 s. The final stationary
+scene had 50 mesh parts and zero degraded partitions, with frame p95 5.49 ms.
+This is not a paired forest/FPS comparison, WAN test or native/client parity claim.
+
+The adaptive terrain codec's same-fixture microbenchmarks measured JSON bytes
+1025→32 for a uniform 8³ partition, 1025→67 for eight layers, and 3073→3103 for
+512 distinct states. Uncached encode-plus-JSON cost increased on layered/distinct
+fixtures; production reuses the encoded result per immutable partition. This
+is a payload/storage tradeoff, not a claimed CPU speedup.
+
 ## Manager and hosting release checks — 2026-10-08
 
 All **59 unit tests**, the real TCP protocol integration fixture, JavaScript
@@ -237,5 +252,5 @@ Still measure: Roblox p50/p95/p99 RTT/jitter and reconciliation error, serializa
 alternatives/palette packing/compression, chunk conversion, entity/event
 throughput, session counts/CPU/GC, total cached-chunk/player memory, partition mesh
 upload/device memory/instance counts, API latency under load and independent
-terrain worker contention. No TPS, FPS, session scaling or public-network latency
-results have been claimed.
+terrain worker contention. Local Studio frame samples are documented above; TPS, session scaling and
+public-network latency results remain unestablished.

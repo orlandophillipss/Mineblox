@@ -1,5 +1,9 @@
 # Patch 2 parity and validation
 
+The table below records the earlier patch. The current beta.2 corrections and
+remaining gaps are maintained in [phase2-bugfixes.md](phase2-bugfixes.md); do not
+interpret this historical table as the current implementation inventory.
+
 Minecraft Java 1.21.4 remains authoritative. This is a local Studio client;
 published authentication, identity linking and external chat are unfinished.
 

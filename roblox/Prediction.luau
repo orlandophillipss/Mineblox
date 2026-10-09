@@ -24,10 +24,12 @@ function Prediction.step(state,frame,world)
 	local function held(i) return bit32.band(frame.controls,2^i)~=0 end
 	local forward=(held(0) and 1 or 0)-(held(1) and 1 or 0)
 	local strafe=(held(3) and 1 or 0)-(held(2) and 1 or 0)
-	local sprint=held(5) local ground=state.onGround
+	local sprint=held(5) and forward>0 and not held(6) local ground=state.onGround
 	local jumpTicks=math.max(0,(state.jumpTicks or 0)-1)
 	local feet=world:get(math.floor(p.x),math.floor(p.y+.4),math.floor(p.z))
-	local liquid=feet and (feet.name=="water" or feet.name=="lava")
+	local liquid,current
+	if world.fluid then liquid,current=world:fluid(p) else liquid=feet and (feet.name=="water" or feet.name=="lava") and feet.name end
+	if current then v.x+=current.x v.y+=current.y v.z+=current.z end
 	local length=math.max(1,math.sqrt(forward*forward+strafe*strafe))
 	forward=forward/length*.98 strafe=strafe/length*.98
 	if held(6) then forward*=.3 strafe*=.3 end
@@ -55,19 +57,27 @@ function Prediction.step(state,frame,world)
 		if stepMove[1]^2+stepMove[3]^2>moved[1]^2+moved[3]^2 then at=landed moved={stepMove[1],rise[2]+fall[2],stepMove[3]} end
 	end
 	local onGround=v.y<0 and moved[2]~=v.y
+	local blocked=moved[1]~=v.x or moved[3]~=v.z
 	if moved[1]~=v.x then v.x=0 end if moved[3]~=v.z then v.z=0 end if moved[2]~=v.y then v.y=0 end
-	if liquid then local inertia=feet.name=="water" and .8 or .5 v.x*=inertia v.z*=inertia v.y=v.y*inertia-.02
+	if liquid then
+		local inertia=liquid=="water" and .8 or .5 v.x*=inertia v.z*=inertia v.y=v.y*inertia-.02
+		if blocked then
+			local exit,fall=move(at,{0,.6,0},boxes)
+			if held(4) and fall[2]==.6 and world.fluid and not world:fluid(exit) then v.y=.3 end
+		end
 	else v.x*=friction v.z*=friction v.y=(v.y-.08)*.98 end
-	return {position=at,velocity=v,onGround=onGround,jumpTicks=jumpTicks}
+	return {position=at,velocity=v,onGround=onGround,jumpTicks=jumpTicks,liquid=liquid}
 end
 function Prediction.new(world) return setmetatable({world=world,history={},lastStateSeq=0,correction=0,error=0,stale=0},Prediction) end
 function Prediction:reset(snapshot)
-	self.state={position=copy(snapshot.predicted.position),velocity=copy(snapshot.velocity),onGround=snapshot.predicted.onGround,jumpTicks=snapshot.jumpTicks or 0} self.history={} self.lastStateSeq=0 self.correction=0
+	self.state={position=copy(snapshot.predicted.position),velocity=copy(snapshot.velocity),onGround=snapshot.predicted.onGround,jumpTicks=snapshot.jumpTicks or 0} self.history={} self.lastStateSeq=0 self.correction=0 self.verticalFlight=false
 end
 function Prediction:input(frame)
 	if not self.state then return end
 	self.lastInputAt=frame.clientTimeMs/1000
+	local grounded=self.state.onGround
 	self.state=Prediction.step(self.state,frame,self.world)
+	if grounded and not self.state.onGround and bit32.band(frame.controls,16)~=0 and not self.state.liquid then self.verticalFlight=true end
 	table.insert(self.history,{seq=frame.seq,frame=table.clone(frame),state=self.state})
 	if #self.history>64 then table.remove(self.history,1) end
 end
@@ -76,13 +86,21 @@ function Prediction:reconcile(snapshot)
 	self.lastStateSeq=snapshot.stateSeq or self.lastStateSeq+1
 	if not self.state then self:reset(snapshot) return true end
 	local base={position=copy(snapshot.predicted.position),velocity=copy(snapshot.velocity),onGround=snapshot.predicted.onGround,jumpTicks=snapshot.jumpTicks or 0}
+	if snapshot.correction and snapshot.correction.revision~=self.correction then self.correction=snapshot.correction.revision self.state=base self.history={} self.verticalFlight=false return true end
 	local remaining={}
 	-- Ack covers bridge-applied input; it is never a server position acknowledgement.
-	for _,entry in ipairs(self.history) do if entry.seq>(snapshot.observedClientSeq or 0) then table.insert(remaining,entry) base=Prediction.step(base,entry.frame,self.world) end end
+	local lead=math.clamp(math.floor(snapshot.presentationLeadTicks or 0),0,4)
+	for _,entry in ipairs(self.history) do if entry.seq>(snapshot.observedClientSeq or 0)-lead then table.insert(remaining,entry) base=Prediction.step(base,entry.frame,self.world) end end
 	local dx,dy,dz=base.position.x-self.state.position.x,base.position.y-self.state.position.y,base.position.z-self.state.position.z
 	self.error=math.sqrt(dx*dx+dy*dy+dz*dz)
+	-- A regular held-intent response can be several physics ticks behind a short
+	-- jump. Preserve its local vertical presentation instead of rewinding at 5 Hz.
+	-- Forced moves, large divergence and liquids still correct immediately.
+	if self.verticalFlight and self.error<2 and not snapshot.inWater and not snapshot.inLava then
+		base.position.y=self.state.position.y base.velocity.y=self.state.velocity.y base.onGround=self.state.onGround base.jumpTicks=self.state.jumpTicks
+		if self.state.onGround and snapshot.predicted.onGround then self.verticalFlight=false end
+	elseif self.error>=2 then self.verticalFlight=false end
 	self.state=base self.history=remaining
-	if snapshot.correction and snapshot.correction.revision~=self.correction then self.correction=snapshot.correction.revision self.history={} return true end
 	return self.error>2
 end
 return Prediction

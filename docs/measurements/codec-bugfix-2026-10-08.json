@@ -1,0 +1,123 @@
+{
+  "date": "2026-10-08T22:42:07.346Z",
+  "node": "v24.16.0",
+  "platform": "win32",
+  "arch": "x64",
+  "cpu": "AMD Ryzen 7 9800X3D 8-Core Processor           ",
+  "results": [
+    {
+      "name": "snapshot encode 16^3",
+      "iterationsPerSample": 1000,
+      "samples": 7,
+      "medianUs": 27.500199999999992,
+      "minUs": 26.70989999999999,
+      "maxUs": 28.746899999999982
+    },
+    {
+      "name": "snapshot decode 16^3",
+      "iterationsPerSample": 1000,
+      "samples": 7,
+      "medianUs": 13.202999999999975,
+      "minUs": 12.518199999999979,
+      "maxUs": 21.0702
+    },
+    {
+      "name": "greedy mesh solid 16^3",
+      "iterationsPerSample": 50,
+      "samples": 7,
+      "medianUs": 1171.9479999999999,
+      "minUs": 1096.2300000000005,
+      "maxUs": 1222.242000000001
+    },
+    {
+      "name": "greedy mesh plane 64x1x64",
+      "iterationsPerSample": 50,
+      "samples": 7,
+      "medianUs": 1062.2839999999997,
+      "minUs": 1033.9300000000003,
+      "maxUs": 1069.7879999999986
+    },
+    {
+      "name": "input validation",
+      "iterationsPerSample": 10000,
+      "samples": 7,
+      "medianUs": 0.05194000000001324,
+      "minUs": 0.0251700000000028,
+      "maxUs": 0.09333000000001448
+    },
+    {
+      "name": "legacy terrain JSON uniform",
+      "iterationsPerSample": 1000,
+      "samples": 7,
+      "medianUs": 6.565299999999979,
+      "minUs": 6.324800000000096,
+      "maxUs": 7.356700000000046
+    },
+    {
+      "name": "adaptive terrain encode + JSON uniform",
+      "iterationsPerSample": 1000,
+      "samples": 7,
+      "medianUs": 6.876700000000028,
+      "minUs": 6.5663999999999305,
+      "maxUs": 8.12239999999997
+    },
+    {
+      "name": "legacy terrain JSON layered",
+      "iterationsPerSample": 1000,
+      "samples": 7,
+      "medianUs": 6.587600000000066,
+      "minUs": 6.457499999999982,
+      "maxUs": 7.0038999999999305
+    },
+    {
+      "name": "adaptive terrain encode + JSON layered",
+      "iterationsPerSample": 1000,
+      "samples": 7,
+      "medianUs": 13.74090000000001,
+      "minUs": 13.155099999999948,
+      "maxUs": 14.776100000000042
+    },
+    {
+      "name": "legacy terrain JSON distinct",
+      "iterationsPerSample": 1000,
+      "samples": 7,
+      "medianUs": 9.854399999999941,
+      "minUs": 9.686399999999821,
+      "maxUs": 10.440200000000004
+    },
+    {
+      "name": "adaptive terrain encode + JSON distinct",
+      "iterationsPerSample": 1000,
+      "samples": 7,
+      "medianUs": 29.882100000000033,
+      "minUs": 28.92360000000008,
+      "maxUs": 30.138100000000122
+    },
+    {
+      "name": "single-voxel delta",
+      "iterationsPerSample": 1000,
+      "samples": 7,
+      "medianUs": 0.0748999999998432,
+      "minUs": 0.046399999999948704,
+      "maxUs": 0.3158000000000811
+    }
+  ],
+  "snapshotBytes": 16416,
+  "voxelStorageBytes": 16384,
+  "planeQuads": 6,
+  "terrainJsonBytes": {
+    "uniform": {
+      "legacy": 1025,
+      "adaptive": 32
+    },
+    "layered": {
+      "legacy": 1025,
+      "adaptive": 67
+    },
+    "distinct": {
+      "legacy": 3073,
+      "adaptive": 3103
+    }
+  },
+  "note": "Local microbenchmarks; no network RTT, server TPS, Roblox FPS, total heap per chunk, or session scaling claims."
+}

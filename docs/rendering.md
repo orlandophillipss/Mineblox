@@ -18,57 +18,41 @@ Tests cover cube/adjacent/stacked blocks, large plane, hole, different materials
 transparent same/different boundaries, negative origin, neighbor boundaries and
 random worlds compared to an independent exposed-unit-face reference.
 
-## Shipped local Studio renderer
+## Current local Studio renderer
 
-The terrain worker emits bounded 8^3 partition meshes. The Roblox client groups
-greedy faces by texture, creates block-scale repeated UVs and freezes completed
-EditableMeshes using CreateEditableMeshAsync with FixedSize=true. Retained dynamic
-meshes hit the client memory budget in the normally generated world; fixed-size
-meshes eliminated that observed failure. Parts and their backing meshes are
-destroyed together on replacement/eviction. Empty partitions allocate no meshes.
-Vertices are centered in mesh object space before placing the MeshPart at its
-world center; a live viewport check caught and corrected duplicated translation.
-Ambient light keeps the local preview readable at night; it is not Minecraft
-light propagation.
+The worker emits bounded 8³ partitions. The client batches by atlas page and
+opaque/cutout/water layer, then freezes completed EditableMeshes with FixedSize.
+Canonical voxels use compact buffers or a uniform value independently of meshes.
+GPU allocation failure retains previous geometry where possible; an explicitly
+labelled preview is capped at 16 faces and retries after a delay.
 
-The real development textures/HUD sprites are loaded from private pixel data
-into EditableImages; no image is uploaded to Roblox. Device allocation failure
-uses an explicitly logged greedy-face Part fallback. That path is bounded by
-partition quad limits but may be expensive and uses substitute colors.
+Lazy 1024-pixel atlas pages contain 128-pixel nearest-copied tiles with four-pixel
+gutters. Greedy quads split at voxel boundaries so UVs repeat inside the correct
+cell. This adds triangles while reducing per-texture mesh batches. Both opaque
+and alpha appearances request pixel sampling; engine mip/filtering still differs
+from native Java. See ADR 0006 for the measured tradeoff and platform references.
 
-The local generated forest has been inspected with textured meshes and real HUD
-sprites. This does not cover every Minecraft material: the development catalogue
-contains common blocks, including the observed dark-oak and mushroom materials.
-Collision shapes approximate unsupported non-cube visuals; full blockstate,
-multipart, rotated-model, fluid, biome-color and lighting parity is unfinished.
+Build/upload work yields after roughly 3–4 ms. Generations/revisions discard stale
+worker results. Responses carry up to 16 partitions within 768 KiB. Interest
+follows the player, including bounded loaded-ground bands for high players;
+camera rotation performs only local visibility checks. Cached terrain can still
+arrive later than gameplay, and the system is not full-height streaming or LOD.
 
-## Remaining runtime work
+Models select variants/multipart definitions, parents, face UVs and block rotations.
+Partial faces preserve texture scale and rotated cullfaces hide against opaque
+neighbors. Common stairs/slabs/walls/doors/panes/plants are prepared separately
+from all item icons. Unknown models remain observable substitutes. UV-lock,
+rescaled element rotations, exact biome tint, fluid slopes/animation and full
+coverage remain unfinished.
 
-Start with 16^3 voxel sections and test 8^3/16^3 mesh partitions. Rebuild only the
-changed partition and boundary neighbors. Track mesh generation and upload
-separately. Keep a pool, cap work/frame, cancel stale mesh jobs by revision and
-cap client memory/instances. Merge key must include face texture, state/orientation,
-transparency, geometry, relevant lighting/tint and UV policy before actual assets
-are used. The current simple keys don't implement those production policies.
+The sky controller removes default photographic sky, clouds and post effects.
+Original gradients plus private square celestial/cloud textures provide the local
+presentation. A projected sky cloud plane preserves angular size/UV motion while
+avoiding global distance fog erasing it. Direct engine solar illumination is
+disabled after its plastic glare was reproduced; vertex directional shade and
+approximate ambient day/night remain. This is not block/sky light propagation,
+ambient occlusion, weather or dimension parity.
 
-EditableMesh's documented limits require splitting by triangles/vertices, not
-merely by Minecraft chunk: worst-case checkerboards can exceed a single mesh.
-Budget below limits, handle allocation failure, cull frustum/distance locally,
-and test devices. LOD/occlusion are later measured extensions. Minecraft interest
-regions follow player world movement; camera rotation must not request terrain.
-
-## Textures/models
-
-AssetStore can resolve vanilla model parents and texture aliases and retrieve
-blockstates/textures. A renderer still needs variant/multipart selection, model
-rotations, element faces, uvlock, cullface, transparency, biome tint, animation
-and item-model rules. Never silently render every block as a cube in a supported
-gameplay experience.
-
-Merged UVs must repeat at one texture tile per Minecraft block. UV coordinates
-outside 0..1 may work with a repeating standalone texture, but a conventional
-atlas will sample adjacent tiles rather than repeat one atlas cell. Verify Roblox
-sampling first; choose material-specific textures, a supported repeat strategy,
-or subdivided tiled UV geometry. Padding/mip behavior also need device tests.
-Asset uploads need Roblox content permission and appropriate usage rights.
-No HTTP image URL is assumed usable as a MeshPart texture ID.
+The final controlled flat scene has 147 cached partitions, 50 resident mesh parts,
+12,720 triangles and zero degraded partitions. This is not a paired forest speedup
+or device-budget guarantee. See [bug-fix validation](phase2-bugfixes.md).

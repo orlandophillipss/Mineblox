@@ -37,10 +37,11 @@ provider. There is no trusted upstream manifest pin or persistent cache quota
 yet; plan those before broad bulk import. Offline cached reads remain usable.
 
 AssetStore.model resolves bounded parent inheritance and merges texture mappings;
-resolveTexture resolves bounded #aliases. This does not yet convert Minecraft
-models into Roblox geometry. Blockstate variants, multipart rules, animated PNG
-strips, biome color maps and custom resource-pack namespaces need a later slice.
-The provider intentionally supports only minecraft models/blockstates/textures
+resolveTexture resolves bounded #aliases. Build-time conversion now produces bounded face geometry for item and common
+blockstate models, including variant/multipart selection. Animated PNG strips
+currently use their first square frame; biome color maps, dynamic/special items
+and custom resource-pack namespaces need a later slice.
+The provider intentionally supports only minecraft items/models/blockstates/textures
 paths, not arbitrary remote URLs or Minecraft gameplay data.
 
 ## Private Studio development pixels
@@ -49,8 +50,7 @@ paths, not arbitrary remote URLs or Minecraft gameplay data.
 set. PNGJS decodes only images with bounded dimensions, checked before decode.
 `DevelopmentAssets.luau` is generated under ignored `.local/roblox` and embedded
 only in the private generated place. The client creates EditableImages from RGBA
-pixels; block meshes use TextureContent and HUD labels use ImageContent. Nothing
-is uploaded to Roblox. The visible generated forest's common block materials
+pixels; block meshes use TextureContent and HUD labels use ImageContent. No Minecraft pixels are uploaded to Roblox. The visible generated forest's common block materials
 and actual hearts, hunger, hotbar, selection, crosshair and experience sprites
 have been tested locally. The catalogue is not a complete Minecraft asset/model
 implementation. Missing optional assets retain explicit substitute-color diagnostics.
@@ -71,4 +71,16 @@ containing proprietary assets. Use user-provided assets or independently license
 substitutes for redistributable examples. The tests create synthetic JSON/content.
 Roblox texture/mesh upload, moderation, ownership/access and runtime content rules
 are separate checks; the mcasset.cloud URL is not automatically a Roblox asset ID.
-No assets have been uploaded to Roblox by this run.
+Six original Mineblox procedural gradient images were uploaded through Studio;
+these contain no Minecraft pixels. Their permitted Roblox IDs are in
+`roblox/SkyAssets.luau`. Minecraft textures/models/recordings remain private.
+
+## Phase 2 private registry
+
+The build audits every pinned item definition: 1,279 supported, 105 explicit
+unsupported special/dynamic models in `.local/roblox/item-audit.json`. World
+non-cube coverage is separately audited in `.local/roblox/block-audit.json`
+(253 requested and prepared models). These counts describe conversion, not
+visual parity for every state. Generated sprites compose permitted private
+source layers; mesh items retain their own GUI transforms. Source/model/pixel
+modules are split below Studio MCP's per-call limit and never included in ZIPs.
