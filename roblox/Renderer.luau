@@ -43,6 +43,19 @@ local function vertices(q,material)
 	if q[2] < 0 then out[2], out[4] = out[4], out[2] uv[2], uv[4] = uv[4], uv[2] end
 	return out, uv
 end
+local function faceColor(q,material,textured)
+	local color=textured and Color3.new(1,1,1) or Color3.fromRGB(table.unpack(material.color))
+	if textured and (string.find(material.name,"leaves") or material.name=="fern" or material.name=="short_grass" or material.name=="grass_block" and q[1]==1 and q[2]==1) then color=Color3.fromRGB(145,189,89) end
+	if textured and material.name=="water" then color=Color3.fromRGB(63,118,228) end
+	local axis,sign=q[1],q[2]
+	if q[9] then
+		local p=material.modelFaces[q[9]].points
+		local normal=(Vector3.new(table.unpack(p[2]))-Vector3.new(table.unpack(p[1]))):Cross(Vector3.new(table.unpack(p[3]))-Vector3.new(table.unpack(p[1])))
+		if normal.Magnitude>0 then normal=normal.Unit local absolute=Vector3.new(math.abs(normal.X),math.abs(normal.Y),math.abs(normal.Z)) axis=absolute.Y>absolute.X and absolute.Y>absolute.Z and 1 or absolute.X>absolute.Z and 0 or 2 sign=axis==1 and normal.Y or axis==0 and normal.X or normal.Z end
+	end
+	local shade=axis==1 and (sign>0 and 1 or .5) or axis==0 and .6 or .8
+	return Color3.new(color.R*shade,color.G*shade,color.B*shade)
+end
 function Renderer:partition(partition)
 	local previous = self.parts[partition.key]
 	if previous and previous.revision >= partition.revision and (not previous.degraded or os.clock()<previous.retryAt) then return end
@@ -55,14 +68,11 @@ function Renderer:partition(partition)
 		local material = palette[q[8]]
 		local key = Images.faceKey(material.name, q[1], q[2], material.properties)
 		if q[9] and material.modelFaces then key=material.modelFaces[q[9]].texture end
-		local cell=self.atlas:get(key) local image=cell and cell.image
+		local cell=self.atlas:get(key,faceColor(q,material,true)) local image=cell and cell.image
 		local atlasKey=key
-		key = not image and "substitute" or ((material.name=="water" and "water" or cell.alpha and "cutout" or "opaque")..":"..cell.page)
+		key = (not image and "substitute" or ((material.name=="water" and "water" or cell.alpha and "cutout" or "opaque")..":"..cell.page))..(q[9] and ":model" or ":solid")
 		if not image then missing[material.name] = true end
-		local tint=Color3.new(1,1,1)
-		if string.find(material.name,"leaves") or material.name=="fern" or material.name=="short_grass" or material.name=="grass_block" and q[1]==1 and q[2]==1 then tint=Color3.fromRGB(145,189,89) end
-		if material.name=="water" then tint=Color3.fromRGB(63,118,228) end
-		if not batches[key] then batches[key] = { image = image, key=key, alpha=cell and cell.alpha, tint=Color3.new(1,1,1), water=material.name=="water", quads = {} } end
+		if not batches[key] then batches[key] = { image = image, key=key, alpha=cell and cell.alpha, doubleSided=q[9]~=nil, tint=Color3.new(1,1,1), water=material.name=="water", quads = {} } end
 		FaceTiles.each(q,function(tile) table.insert(batches[key].quads,{quad=tile,cell=cell,key=atlasKey}) end)
 	end
 	local missingNames = {} for name in pairs(missing) do table.insert(missingNames, name) end table.sort(missingNames)
@@ -94,14 +104,7 @@ function Renderer:partition(partition)
 						table.insert(ids, mesh:AddVertex(p)) table.insert(uvIds, mesh:AddUV(uv[i]))
 					end
 					local material = palette[q[8]]
-					local color = batch.image and Color3.new(1, 1, 1) or Color3.fromRGB(table.unpack(material.color))
-					if batch.image and (string.find(material.name, "leaves") or material.name == "grass_block" and q[1] == 1 and q[2] == 1) then color = Color3.fromRGB(145, 189, 89) end
-					if batch.image and material.name=="water" then color=Color3.fromRGB(63,118,228) end
-					if batch.image and (material.name=="fern" or material.name=="short_grass") then color=Color3.fromRGB(145,189,89) end
-					local axis,sign=q[1],q[2]
-					if q[9] then local normal=(points[2]-points[1]):Cross(points[3]-points[1]) if normal.Magnitude>0 then normal=normal.Unit local absolute=Vector3.new(math.abs(normal.X),math.abs(normal.Y),math.abs(normal.Z)) axis=absolute.Y>absolute.X and absolute.Y>absolute.Z and 1 or absolute.X>absolute.Z and 0 or 2 sign=axis==1 and normal.Y or axis==0 and normal.X or normal.Z end end
-					local shade=axis==1 and (sign>0 and 1 or .5) or axis==0 and .6 or .8
-					color=Color3.new(color.R*shade,color.G*shade,color.B*shade)
+					local color=batch.alpha and Color3.new(1,1,1) or faceColor(q,material,batch.image~=nil)
 					local colorId = mesh:AddColor(color, 1)
 					for _, triangle in ipairs({ {1, 2, 3}, {1, 3, 4} }) do
 						local a, b, c = triangle[1], triangle[2], triangle[3]
@@ -121,17 +124,18 @@ function Renderer:partition(partition)
 				mesh:Destroy()
 				mesh = fixed meshes[#meshes] = fixed
 				local part = AssetService:CreateMeshPartAsync(Content.fromObject(mesh))
-				part.Anchored = true part.CanCollide = false part.CanTouch=false part.CanQuery=false part.CastShadow=false part.DoubleSided = true
+				part.Anchored = true part.CanCollide = false part.CanTouch=false part.CanQuery=false part.CastShadow=false part.DoubleSided = batch.doubleSided
 				part.Material = Enum.Material.SmoothPlastic part.Color = Color3.new(1, 1, 1)
 				part.CFrame = CFrame.new(center)
-				if batch.image then part.TextureContent = Content.fromObject(batch.image) end
+				-- An opaque texture underlay fills the SurfaceAppearance's alpha
+				-- holes. Cutout colors/shades are already baked into the atlas.
+				if batch.image and not batch.alpha then part.TextureContent = Content.fromObject(batch.image) end
 				if batch.image then
 					local appearance=AssetService:CreateSurfaceAppearanceAsync({ColorMap=Content.fromObject(batch.image)})
 					appearance.AlphaMode=batch.alpha and Enum.AlphaMode.Transparency or Enum.AlphaMode.Overlay appearance.ResampleMode=Enum.ResamplerMode.Pixelated appearance.Color=batch.tint appearance.Parent=part
 				end
-				-- The depth-only alpha path displayed black leaf holes in this Studio
-				-- build. Roblox's documented soft-alpha path preserves atlas cutouts.
-				if batch.water then part.Transparency=.25 elseif batch.alpha then part.Transparency=.02 end
+				-- Hard cutouts use depth testing; soft blending sorts foliage poorly.
+				if batch.water then part.Transparency=.25 end
 				part.Parent = group
 			end
 		end)

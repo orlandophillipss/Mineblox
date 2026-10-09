@@ -32,6 +32,19 @@ const chunk = new VoxelRegion({ size: [16, 16, 16] });
 chunk.data.fill(1);
 const plane = new VoxelRegion({ size: [64, 1, 64] });
 plane.data.fill(1);
+const foliage = new VoxelRegion({ size: [8, 8, 8] });
+foliage.data.set(Uint32Array.from({ length: 512 }, (_, i) => 1 + (i % 2)));
+const foliageMesh = (cull) =>
+  greedyMesh(foliage, (state) =>
+    state === 0
+      ? null
+      : {
+          key: String(state),
+          opaque: false,
+          cullSame: cull,
+          cullKey: 'oak_leaves',
+        },
+  );
 const wire = encodeSnapshot(chunk);
 const input = { version: 1, seq: 1, controls: 1, yaw: 0, pitch: 0 };
 const terrainCases = {
@@ -44,6 +57,12 @@ const results = [
   measure('snapshot decode 16^3', 1000, () => decodeSnapshot(wire)),
   measure('greedy mesh solid 16^3', 50, () => greedyMesh(chunk)),
   measure('greedy mesh plane 64x1x64', 50, () => greedyMesh(plane)),
+  measure('leaf variants 8^3 retaining interior faces', 100, () =>
+    foliageMesh(false),
+  ),
+  measure('leaf variants 8^3 culling interior faces', 100, () =>
+    foliageMesh(true),
+  ),
   measure('input validation', 10000, () => validateInput(input)),
   ...Object.entries(terrainCases).flatMap(([name, data]) => [
     measure(`legacy terrain JSON ${name}`, 1000, () =>
@@ -72,6 +91,18 @@ const output = {
   snapshotBytes: wire.length,
   voxelStorageBytes: chunk.data.byteLength,
   planeQuads: greedyMesh(plane).length,
+  foliage: Object.fromEntries(
+    [false, true].map((cull) => {
+      const quads = foliageMesh(cull);
+      return [
+        cull ? 'culled' : 'interiorFaces',
+        {
+          quads: quads.length,
+          unitFaces: quads.reduce((area, q) => area + q.width * q.height, 0),
+        },
+      ];
+    }),
+  ),
   terrainJsonBytes: Object.fromEntries(
     Object.entries(terrainCases).map(([name, data]) => [
       name,

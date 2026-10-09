@@ -33,7 +33,9 @@ export function greedyMesh(
             if (
               b &&
               (b.opaque ||
-                (!a.opaque && a.cullSame !== false && b.key === a.key))
+                (!a.opaque &&
+                  a.cullSame !== false &&
+                  (b.cullKey ?? b.key) === (a.cullKey ?? a.key)))
             )
               continue;
             mask[i + dims[u] * j] = a.key;

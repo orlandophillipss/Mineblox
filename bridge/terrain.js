@@ -271,10 +271,7 @@ export class TerrainService {
               const cube =
                 shapes.length === 1 &&
                 shapes[0].every((n, i) => n === (i < 3 ? 0 : 1));
-              if (
-                (cube && !block.transparent) ||
-                ['water', 'lava'].includes(block.name)
-              )
+              if (cube || ['water', 'lava'].includes(block.name))
                 neighbors[at.join(',')] = block.stateId;
               if (!palette.has(block.stateId))
                 palette.set(block.stateId, {

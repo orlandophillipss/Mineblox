@@ -95,6 +95,33 @@ Temporary diagnostic images/lights were removed, and world time was restored
 after the daylight visual comparison. Soft transparency can affect sorting and
 occlusion; full Minecraft light propagation remains unimplemented.
 
+## October 9 lighting and foliage follow-up
+
+The initial soft-alpha workaround was replaced after a moving forest check
+exposed sorting artifacts and a mesh-budget failure. An isolated alpha comparison
+showed the opaque TextureContent underlay filled SurfaceAppearance holes. Cutouts
+now omit that underlay, bake tint/shade in atlas cells and use depth testing at
+transparency 0. Cube faces are single-sided; model cards retain both sides.
+Leaf species share an occlusion family across state variants and partition halos,
+while face merge keys and canonical voxels remain state-local. This approximates
+an exterior canopy rather than retaining all native fancy-leaf interior faces.
+
+The repeatable `npm run bench` leaf fixture emitted 384 unit faces rather than
+3,072; median CPU meshing was 161.735 versus 175.545 microseconds. This is geometry
+and CPU evidence, not a paired Studio FPS improvement. The final forest playtest
+had 147 cached partitions, 195 mesh parts, 33,254 triangles, 33 atlas cells and zero
+degraded partitions. All 35 visible cutout parts had the corrected binding. The
+2,400-frame sample had p95 5.50 ms and p99 6.12 ms, with total Studio memory about
+3.14 GiB. Its console showed no allocation errors. Details are in
+[foliage-bugfix-2026-10-09.json](measurements/foliage-bugfix-2026-10-09.json).
+
+The night ambient floor is raised from RGB 35/40/55 to 180/185/200, with white
+daytime ambient and dark night sky/fog retained. This is a visual approximation,
+including in caves, rather than server block/sky light. Preview overrides were
+cleared by the fresh playtest. All 86 unit tests, two integration tests and the
+JavaScript/Luau gates passed. Device budgets and larger forest walks still need
+coverage; bounded fallback remains explicit if allocation fails elsewhere.
+
 ## Remaining work
 
 Recipe book, full creative categories, creative/spectator flight, effects/vehicles,

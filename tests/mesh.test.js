@@ -44,7 +44,7 @@ test('transparent interfaces and chunk borders use explicit occlusion rules', ()
       ),
     ),
     12,
-    'cutout foliage keeps faces behind transparent texels',
+    'an explicit no-cull material can retain faces behind transparent texels',
   );
   a.set(1, 0, 0, 3);
   assert.equal(area(greedyMesh(a, material)), 12);

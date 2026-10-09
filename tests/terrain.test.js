@@ -90,6 +90,47 @@ test('the real terrain worker meshes water and lava levels and culls boundary ne
   }
 });
 
+test('leaf state variants omit coincident interior faces without merging distinct state materials', async (t) => {
+  const terrain = new TerrainService();
+  t.after(() => terrain.close());
+  const palette = [1, 2].map((state) => ({
+    state,
+    name: 'oak_leaves',
+    cube: true,
+    opaque: false,
+    properties: { distance: state, persistent: state === 2 },
+  }));
+  const data = new Uint32Array(512);
+  data[0] = 1;
+  data[1] = 2;
+  const quads = await terrain.mesh({ origin: [-8, 64, 0], data, palette });
+  assert.equal(
+    quads.reduce((area, q) => area + q[5] * q[6], 0),
+    10,
+  );
+  assert.ok(
+    !quads.some((q) => q[0] === 0 && q[2] === -7),
+    'shared plane has no duplicate faces',
+  );
+  assert.deepEqual(
+    new Set(quads.map((q) => q[7])),
+    new Set([1, 2]),
+    'render keys remain state-local',
+  );
+  data[1] = 0;
+  const boundary = await terrain.mesh({
+    origin: [-8, 64, 0],
+    data,
+    palette,
+    neighbors: { '-9,64,0': 2 },
+  });
+  assert.equal(boundary.length, 5);
+  assert.ok(
+    !boundary.some((q) => q[0] === 0 && q[1] === -1),
+    'neighbor partition uses the same occlusion family',
+  );
+});
+
 function setup(t) {
   const bot = fakeBot();
   bot.entity.position = new Vec3(0, 64, 0);
@@ -125,6 +166,32 @@ function setup(t) {
     },
   };
 }
+test('stream extraction includes transparent cube neighbors so leaf partition seams are culled', async (t) => {
+  const { terrain, player, bot } = setup(t);
+  bot.blockAt = (p) => {
+    const leaf = p.y === 63 && p.z === 0 && p.x >= 0 && p.x < 16;
+    return {
+      stateId: leaf ? (p.x < 8 ? 1 : 2) : 0,
+      name: leaf ? 'oak_leaves' : 'air',
+      transparent: true,
+      shapes: leaf ? [[0, 0, 0, 1, 1, 1]] : [],
+      getProperties: () => ({ distance: p.x < 8 ? 1 : 2 }),
+    };
+  };
+  const state = terrain.state(player);
+  const left = await terrain.partition(player, state, '0,7,0');
+  const right = await terrain.partition(player, state, '1,7,0');
+  for (const part of [left, right]) {
+    assert.ok(!part.quads.some((q) => q[0] === 0 && q[2] === 8));
+    assert.ok(
+      part.voxels.some((voxel) => voxel !== 0),
+      'canonical leaves remain present',
+    );
+  }
+  assert.ok(left.quads.some((q) => q[0] === 0 && q[2] === 0));
+  assert.ok(right.quads.some((q) => q[0] === 0 && q[2] === 16));
+});
+
 test('interest is bounded and floor-correct across negative partition boundaries', () => {
   assert.equal(partitionKey({ x: -0.01, y: -64, z: -8.1 }), '-1,-8,-2');
   const keys = interestKeys({ x: 0, y: 64, z: 0 });

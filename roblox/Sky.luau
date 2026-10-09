@@ -63,7 +63,10 @@ function Sky:tick(camera)
 	-- Direct Roblox solar lighting introduces broad specular highlights even
 	-- with Bloom/specular environment disabled. Minecraft faces use vertex shade.
 	Lighting.ClockTime=(time/1000+6)%24 Lighting.Brightness=0
-	Lighting.Ambient=Color3.fromRGB(35,40,55):Lerp(Color3.new(1,1,1),daylight) Lighting.OutdoorAmbient=Lighting.Ambient
+	-- Presentation floor: the old 35/40/55 ambient crushed shaded textures to
+	-- black. Keep nighttime terrain readable while the sky/fog remain dark.
+	-- This is approximate illumination, not Minecraft block/sky light data.
+	Lighting.Ambient=Color3.fromRGB(180,185,200):Lerp(Color3.new(1,1,1),daylight) Lighting.OutdoorAmbient=Lighting.Ambient
 	Lighting.FogColor=self.inWater and Color3.fromRGB(25,55,115) or Color3.fromRGB(20,24,38):Lerp(Color3.fromRGB(156,190,239),daylight)
 	Lighting.FogStart=self.inWater and 4 or 96 Lighting.FogEnd=self.inWater and 40 or 192
 	local night=daylight<.2

@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.2.0-beta.6 — 2026-10-09
+
+- Raised the client's nighttime ambient floor so shaded block textures stay
+  readable instead of becoming nearly black. Daytime still reaches white ambient;
+  server time, dark night sky/fog and disabled direct solar glare are preserved.
+- Checked the night-floor setting in the user's forest scene, then installed it
+  through a fresh Studio playtest. Illumination is still an approximation until
+  Minecraft block/sky light data is rendered.
+- Replaced the soft-alpha leaf workaround with hard depth-tested cutouts. Cutout
+  meshes no longer carry an opaque texture underlay; atlas cells bake foliage tint
+  and directional shades so transparent holes retain their color and depth.
+- Culled coincident leaf interiors across distance/persistence variants and
+  partition boundaries; cube surfaces use front faces while model cards retain
+  both sides. Added real worker/extraction regressions and a reproducible foliage
+  benchmark to reduce geometry pressure behind the mesh-budget fallback panels.
+
 ## 0.2.0-beta.5 — 2026-10-09
 
 - Fixed terrain HTTP 500 responses when a streamed partition contains water or

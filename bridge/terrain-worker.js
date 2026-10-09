@@ -21,7 +21,9 @@ parentPort.on('message', ({ id, origin, data, palette, neighbors = {} }) => {
           ? {
               key: String(state),
               opaque: p.opaque,
-              cullSame: !p.name.endsWith('_leaves'),
+              // State-local distance/persistence do not change the leaf surface.
+              // Keep merge keys distinct, but omit coincident interior foliage.
+              cullKey: p.name.endsWith('_leaves') ? p.name : String(state),
             }
           : null;
       },

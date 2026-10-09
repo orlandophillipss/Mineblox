@@ -1,0 +1,35 @@
+{
+  "date": "2026-10-09",
+  "scope": "Local desktop Studio and isolated CPU microbenchmark; not device/WAN parity",
+  "node": "v24.16.0",
+  "cpu": "AMD Ryzen 7 9800X3D",
+  "fixture": {
+    "description": "8^3 full leaf region with alternating state IDs, identical species, no neighbors",
+    "command": "npm run bench",
+    "iterationsPerSample": 100,
+    "samples": 7,
+    "retainInteriors": { "quads": 272, "unitFaces": 3072, "medianUs": 175.545 },
+    "cullInteriors": { "quads": 34, "unitFaces": 384, "medianUs": 161.735 }
+  },
+  "studio": {
+    "position": { "x": 137.7, "y": 138, "z": 12.80383179390368 },
+    "cachedPartitions": 147,
+    "residentMeshParts": 195,
+    "residentTriangles": 33254,
+    "atlasCells": 33,
+    "degradedPartitions": 0,
+    "renderQueue": 0,
+    "visibleCutoutParts": 35,
+    "incorrectCutoutBindings": 0,
+    "frameSamples": 2400,
+    "frameP95Ms": 5.4984,
+    "frameP99Ms": 6.1198,
+    "totalStudioMemoryMb": 3218.26171875
+  },
+  "notes": [
+    "Cutouts use only SurfaceAppearance, transparency zero, with tint/shade baked in atlas cells.",
+    "Console showed no allocation errors after final fresh playtest; diagnostic geometry was removed.",
+    "Scene and coordinates differ from the user's earlier screenshot, so no paired FPS or memory gain is claimed.",
+    "The canopy shell omits leaf interior faces; full light propagation, mobile and published validation remain incomplete."
+  ]
+}
