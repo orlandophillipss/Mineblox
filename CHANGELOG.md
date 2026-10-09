@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.0-beta.3 — 2026-10-09
+
+- Fixed repeated HTTP 504 joins when a Minecraft player reconnects while dead.
+  The bridge now accepts server health and position without waiting for an alive
+  spawn, displays the death screen and retains explicit Respawn input.
+- Added health/position ordering and real TCP dead-login/respawn regression tests.
+  Verified the saved dead player against the local vanilla server without
+  automatically respawning or editing the save. Restart the bridge to apply.
+
 ## 0.2.0-beta.2 — 2026-10-09
 
 - Fixed inventory cursor/drag coordinates, carried-stack cleanup, table slots,

@@ -6,6 +6,54 @@ import { fakeBot } from './helpers.js';
 import { Vec3 } from 'vec3';
 
 const frame = { version: 1, seq: 1, controls: 33, yaw: 0.5, pitch: 0.1 };
+test('dead login requires real health and position, then preserves explicit respawn', async () => {
+  for (const order of [
+    ['health', 'forcedMove'],
+    ['forcedMove', 'health'],
+  ]) {
+    const bot = fakeBot();
+    bot.health = 0;
+    let respawns = 0;
+    bot.respawn = () => respawns++;
+    const player = new VirtualPlayer({
+      robloxId: '123',
+      createBot: () => bot,
+      minecraft: {},
+    });
+    bot.emit(order[0]);
+    assert.equal(player.status, 'connecting');
+    bot.emit(order[1]);
+    await player.ready(100);
+    assert.equal(player.snapshot().health, 0);
+    assert.equal(player.worldEpoch, 1);
+    assert.equal(respawns, 0);
+    bot.emit('health');
+    assert.equal(player.worldEpoch, 1);
+    bot.health = 20;
+    bot.emit('spawn');
+    assert.equal(player.worldEpoch, 2);
+    player.close();
+  }
+});
+
+test('dead-looking defaults and an alive health packet cannot bypass spawn readiness', () => {
+  const bot = fakeBot();
+  const player = new VirtualPlayer({
+    robloxId: '123',
+    createBot: () => bot,
+    minecraft: {},
+  });
+  bot.health = 0;
+  bot.emit('forcedMove');
+  assert.equal(player.status, 'connecting');
+  bot.health = 20;
+  bot.emit('health');
+  assert.equal(player.status, 'connecting');
+  bot.emit('spawn');
+  assert.equal(player.status, 'ready');
+  player.close();
+});
+
 test('virtual player disables automatic respawn and preserves bounded sound coordinates', () => {
   const bot = fakeBot();
   let options;

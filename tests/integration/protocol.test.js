@@ -17,6 +17,77 @@ import {
 // A real TCP + configuration/login/chunk/movement protocol fixture, deliberately
 // NOT a vanilla simulation. Real server authority is tested by test:live.
 test(
+  'dead protocol login connects without spawn or automatic respawn',
+  { timeout: 10000 },
+  async (t) => {
+    const md = minecraftData('1.21.4');
+    const server = mc.createServer({
+      host: '127.0.0.1',
+      port: 0,
+      version: '1.21.4',
+      'online-mode': false,
+    });
+    t.after(() => server.close());
+    await once(server, 'listening');
+    let commands = 0;
+    server.on('playerJoin', (client) => {
+      client.on('client_command', () => {
+        commands++;
+        client.write('respawn', {
+          worldState: md.loginPacket.worldState,
+          copyMetadata: 3,
+        });
+        client.write('update_health', {
+          health: 20,
+          food: 20,
+          foodSaturation: 5,
+        });
+      });
+      client.write('login', {
+        ...md.loginPacket,
+        entityId: 7,
+        enforcesSecureChat: false,
+      });
+      client.write('position', {
+        teleportId: 1,
+        x: 8,
+        y: 64,
+        z: 8,
+        dx: 0,
+        dy: 0,
+        dz: 0,
+        yaw: 0,
+        pitch: 0,
+        flags: {},
+      });
+      client.write('update_health', { health: 0, food: 20, foodSaturation: 5 });
+    });
+    const player = new VirtualPlayer({
+      robloxId: '123',
+      createBot: mineflayer.createBot,
+      minecraft: {
+        host: '127.0.0.1',
+        port: server.socketServer.address().port,
+        version: '1.21.4',
+      },
+    });
+    t.after(() => player.close());
+    await player.ready(3000);
+    assert.equal(player.snapshot().health, 0);
+    assert.equal(player.worldEpoch, 1);
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    assert.equal(commands, 0);
+    assert.equal(player.bot.isAlive, false);
+    const spawned = once(player.bot, 'spawn');
+    player.bot.respawn();
+    await spawned;
+    assert.equal(commands, 1);
+    assert.equal(player.snapshot().health, 20);
+    assert.equal(player.worldEpoch, 2);
+  },
+);
+
+test(
   '1.21.4 protocol login, teleport confirmation, chunk decoding, movement, and disconnect',
   { timeout: 15000 },
   async (t) => {

@@ -19,7 +19,7 @@ bounded connected-player roster are returned in state.
 | Method/path                   | Request                                                                             | Response                                                    |
 | ----------------------------- | ----------------------------------------------------------------------------------- | ----------------------------------------------------------- |
 | GET `/health`                 | authenticated                                                                       | protocol version and current session count                  |
-| POST `/v1/sessions`           | `{ "version": 1, "robloxId": "123" }`                                               | 201 session state after spawn; 15 s timeout                 |
+| POST `/v1/sessions`           | `{ "version": 1, "robloxId": "123" }`                                               | 201 after live spawn or dead login; 15 s timeout            |
 | PUT `/v1/sessions/<id>/input` | input frame below                                                                   | state plus acceptedSeq/processingMs                         |
 | POST `/v1/exchange`           | `{ "version": 1, "inputs": [{ "id": "...", "frame": {...} }] }`                     | version and states array, per-entry error/status on failure |
 | POST `/v1/terrain`            | `{ "version": 1, "players": [{ "id": "...", "epoch": 1, "known": {"x,y,z": 4} }] }` | separate world/partition snapshots, max four players        |
@@ -34,6 +34,13 @@ from Roblox's tighter external budget. Spawn/login reservations count toward
 the session cap. Unknown fields, invalid content type/JSON, unsupported versions,
 invalid identity/coordinates and stale sequences fail explicitly. HTTP 400/401/
 404/409/413/415/426/429/502/504 distinguish relevant failure conditions.
+
+A dead login may become ready without Mineflayer's alive `spawn` event once the
+bridge receives server health at zero and a server position in protocol play
+state. Its initial epoch is 1, and the snapshot retains zero health for the death
+screen. The bridge does not respawn automatically; explicit Respawn input invokes
+the normal Minecraft command and a later spawn advances the epoch. A login with
+missing health/position still times out with HTTP 504 after 15 seconds.
 
 ## Input and clocks
 

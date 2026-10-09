@@ -66,9 +66,32 @@ export class VirtualPlayer extends EventEmitter {
         sender: sender ?? null,
       }),
     );
-    this.bot.on('health', () =>
-      this.event('health', { health: this.bot.health, food: this.bot.food }),
-    );
+    const markReady = (event) => {
+      if (this.status === 'closed') return;
+      this.status = 'ready';
+      this.worldEpoch++;
+      this.log({ event, session: this.id, elapsedMs: now() - this.createdAt });
+      this.emit('ready');
+    };
+    const readyDeadLogin = () => {
+      // Mineflayer deliberately emits no spawn for a dead login when respawn
+      // is disabled. Health plus a received position still establishes a real
+      // playable protocol session; the UI must offer the explicit respawn.
+      if (
+        this.status === 'connecting' &&
+        this.receivedHealth &&
+        Number.isFinite(this.bot.health) &&
+        this.bot.health <= 0 &&
+        this.bot._client?.state === 'play' &&
+        this.lastCorrection?.position
+      )
+        markReady('player_connected_dead');
+    };
+    this.bot.on('health', () => {
+      this.receivedHealth = true;
+      this.event('health', { health: this.bot.health, food: this.bot.food });
+      readyDeadLogin();
+    });
     this.bot.on('entityHurt', (entity) =>
       this.event('entityHurt', { id: entity.id }),
     );
@@ -90,17 +113,7 @@ export class VirtualPlayer extends EventEmitter {
         pitch: Number.isFinite(pitch) ? Math.max(0.25, Math.min(4, pitch)) : 1,
       }),
     );
-    this.bot.on('spawn', () => {
-      if (this.status === 'closed') return;
-      this.status = 'ready';
-      this.worldEpoch++;
-      this.log({
-        event: 'player_spawn',
-        session: this.id,
-        elapsedMs: now() - this.createdAt,
-      });
-      this.emit('ready');
-    });
+    this.bot.on('spawn', () => markReady('player_spawn'));
     this.bot.on('forcedMove', () => {
       this.correctionRevision++;
       this.lastCorrection = {
@@ -111,6 +124,7 @@ export class VirtualPlayer extends EventEmitter {
         pitch: this.bot.entity.pitch,
       };
       this.emit('correction', this.lastCorrection);
+      readyDeadLogin();
     });
     this.bot.on('error', (error) => {
       this.log({
