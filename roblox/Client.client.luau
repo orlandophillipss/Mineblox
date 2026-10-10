@@ -96,7 +96,7 @@ local function entityModel(entity)
 			part("Arm", Vector3.new(0.25, 0.65, 0.25), Vector3.new(sign * 0.375, 0.975, 0), Color3.fromRGB(185, 137, 103))
 			part("Leg", Vector3.new(0.25, 0.65, 0.25), Vector3.new(sign * 0.125, 0.325, 0), Color3.fromRGB(64, 60, 141))
 		end
-	else part("Entity", Vector3.new(0.6, 0.8, 0.6), Vector3.new(0, 0.4, 0), Color3.fromRGB(180, 160, 145)) end
+	else local height=entity.height or .8 local width=entity.width or .6 part("Entity", Vector3.new(width,height,width), Vector3.new(0,height/2,0), Color3.fromRGB(180, 160, 145)) model:SetAttribute("VisualFallback",true) end
 	model.WorldPivot = CFrame.new() model.Parent = entityFolder
 	return model
 end
@@ -138,8 +138,9 @@ net.State.OnClientEvent:Connect(function(state)
 		local entry = entities[entity.id]
 		if not entry then entry = { model = entityModel(entity),samples={} } entities[entity.id] = entry end
 		local itemName=entity.item and entity.item.name
-		local visualName=entity.type=="player" and "player" or entity.name
-		if not itemName and not entry.model:GetAttribute("TexturedMob") and EntityVisual.cache[visualName] then entry.model:Destroy() entry.model=entityModel(entity) entry.rig=nil end
+		if not itemName and not entry.model:GetAttribute("TexturedMob") then
+			local ready=EntityVisual.create(entity) if ready then entry.model:Destroy() ready:SetAttribute("TexturedMob",true) ready.Parent=entityFolder entry.model=ready entry.rig=nil end
+		end
 		if entry.itemName~=itemName or itemName and #entry.model:GetChildren()==0 and ItemVisual.cache[itemName] then entry.model:Destroy() entry.model=entityModel(entity) entry.itemName=itemName end
 		entry.isItem=itemName~=nil
 		entry.pitch=entity.pitch or 0
@@ -159,11 +160,13 @@ task.spawn(function()
 	while true do
 		local world = table.remove(worlds, 1)
 		if world and world.id == sessionId and world.epoch >= epoch then
-			local ok, err = pcall(function() worldData:apply(world) renderer:apply(world) end)
+			local ok, err = pcall(function() worldData:apply(world) return renderer:apply(world) end)
 			if not ok then warn("Mineblox render:", err) end
-			local known = {}
-			for key, entry in pairs(renderer.parts) do if not entry.degraded or os.clock()<entry.retryAt then known[key] = entry.revision end end
-			net.TerrainAck:FireServer(renderer.epoch, known)
+			if ok and err and world.id==sessionId and world.epoch==epoch then
+				local known = {}
+				for key, entry in pairs(renderer.parts) do if not entry.degraded or os.clock()<entry.retryAt then known[key] = entry.revision end end
+				net.TerrainAck:FireServer(renderer.epoch, known)
+			end
 		end
 		task.wait()
 	end
@@ -266,7 +269,7 @@ RunService:BindToRenderStep("MinecraftCamera", Enum.RenderPriority.Camera.Value 
 	UserInputService.MouseIconEnabled = not lock
 	interface:tick()
 	if snapshot then placement:tick(worldData,renderer,snapshot) end
-	sky:tick(camera) sounds:movement(prediction.state,worldData)
+	sounds:movement(prediction.state,worldData)
 	frameTotal+=dt frameCount+=1 frameMax=math.max(frameMax,dt)
 	if os.clock()-visibilityAt>.1 then
 		renderer:visibility(camera) visibilityAt=os.clock()
@@ -290,6 +293,7 @@ RunService:BindToRenderStep("MinecraftCamera", Enum.RenderPriority.Camera.Value 
 	if correction then player:SetAttribute("MinecraftCorrection", correction.revision) end
 	camera.FieldOfView+=( (sprinting and 80 or 70)-camera.FieldOfView)*math.min(1,dt*10)
 	camera.CFrame = CFrame.new((displayed + Vector3.new(0, bit32.band(controls,64)~=0 and 1.27 or 1.62, 0)) * 4) * CFrame.Angles(0, yaw, 0) * CFrame.Angles(pitch, 0, 0)
+	sky:tick(camera,worldData)
 	if inputStarted and (displayed-inputOrigin).Magnitude>.01 then
 		player:SetAttribute("FirstCameraResponseMs",(os.clock()-inputStarted)*1000)
 		player:SetAttribute("CameraMovedBeforeStateUpdate",snapshot.stateSeq==inputStateSeq) inputStarted=nil
@@ -329,6 +333,7 @@ if RunService:IsStudio() then
 	local diagnostic=Instance.new("BindableFunction") diagnostic.Name="MinebloxDiagnostics" diagnostic.Parent=player.PlayerGui
 	diagnostic.OnInvoke=function(kind,data)
 		if kind=="snapshot" then return snapshot end
+		if kind=="entities" then local result={} for id,entry in pairs(entities) do table.insert(result,{id=id,name=entry.model.Name,textured=entry.model:GetAttribute("TexturedMob")==true,parts=#entry.model:GetChildren(),visible=entry.model.Parent~=nil}) end return result end
 		if kind=="culling" then renderer.disableCulling=not data renderer:visibility(camera) return true end
 		if kind=="look" then yaw=data.yaw pitch=data.pitch return true end
 		if kind=="action" then local fields=table.clone(data) local action=fields.kind fields.kind=nil send(action,fields) return true end

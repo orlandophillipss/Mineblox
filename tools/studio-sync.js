@@ -50,6 +50,12 @@ try {
     ['ReplicatedStorage.MinebloxClient.Metrics', 'roblox/Metrics.luau'],
     ['ReplicatedStorage.MinebloxClient.Images', 'roblox/Images.luau'],
     ['ReplicatedStorage.MinebloxClient.ItemVisual', 'roblox/ItemVisual.luau'],
+    ['ReplicatedStorage.MinebloxClient.ViewportFit', 'roblox/ViewportFit.luau'],
+    [
+      'ReplicatedStorage.MinebloxClient.EntityDefinitions',
+      'roblox/EntityDefinitions.luau',
+    ],
+    ['ReplicatedStorage.MinebloxClient.EntityLoad', 'roblox/EntityLoad.luau'],
     [
       'ReplicatedStorage.MinebloxClient.EntityVisual',
       'roblox/EntityVisual.luau',

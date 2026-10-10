@@ -12,9 +12,10 @@ local function destroy(entry)
 end
 function Renderer.new()
 	local root = Instance.new("Folder") root.Name = "MinecraftTerrain" root.Parent = workspace
-	return setmetatable({ root = root, parts = {}, epoch = nil, meshAvailable = true, count = 0, triangles=0,visible=0,atlas=Atlas.new() }, Renderer)
+	return setmetatable({ root = root, parts = {}, epoch = nil, generation=0, meshAvailable = true, count = 0, triangles=0,visible=0,atlas=Atlas.new(),catalog=Images.assets }, Renderer)
 end
 function Renderer:clear()
+	self.generation+=1
 	for _, entry in pairs(self.parts) do destroy(entry) end
 	self.parts = {} self.count = 0
 	if self.catalog~=Images.assets then
@@ -57,6 +58,7 @@ local function faceColor(q,material,textured)
 	return Color3.new(color.R*shade,color.G*shade,color.B*shade)
 end
 function Renderer:partition(partition)
+	local generation=self.generation
 	local previous = self.parts[partition.key]
 	if previous and previous.revision >= partition.revision and (not previous.degraded or os.clock()<previous.retryAt) then return end
 	local group = Instance.new("Folder") group.Name = partition.key
@@ -72,7 +74,7 @@ function Renderer:partition(partition)
 		local atlasKey=key
 		key = (not image and "substitute" or ((material.name=="water" and "water" or cell.alpha and "cutout" or "opaque")..":"..cell.page))..(q[9] and ":model" or ":solid")
 		if not image then missing[material.name] = true end
-		if not batches[key] then batches[key] = { image = image, key=key, alpha=cell and cell.alpha, doubleSided=q[9]~=nil, tint=Color3.new(1,1,1), water=material.name=="water", quads = {} } end
+		if not batches[key] then batches[key] = { image = image, key=key, alpha=cell and cell.alpha, doubleSided=q[9]~=nil or material.name=="water", tint=Color3.new(1,1,1), water=material.name=="water", quads = {} } end
 		FaceTiles.each(q,function(tile) table.insert(batches[key].quads,{quad=tile,cell=cell,key=atlasKey}) end)
 	end
 	local missingNames = {} for name in pairs(missing) do table.insert(missingNames, name) end table.sort(missingNames)
@@ -85,11 +87,13 @@ function Renderer:partition(partition)
 		local ok, err = pcall(function()
 			for _, batch in pairs(batches) do
 				if os.clock()-started>.004 then task.wait() started=os.clock() end
+				if generation~=self.generation then error("Terrain build superseded",0) end
 				local mesh = AssetService:CreateEditableMesh() assert(mesh, "EditableMesh allocation denied")
 				table.insert(meshes, mesh)
 				local low, high = Vector3.new(math.huge, math.huge, math.huge), Vector3.new(-math.huge, -math.huge, -math.huge)
 				for _, tile in ipairs(batch.quads) do
 					if os.clock()-started>.003 then task.wait() started=os.clock() end
+					if generation~=self.generation then error("Terrain build superseded",0) end
 					local q=tile.quad
 					local points, uv = vertices(q,palette[q[8]])
 					if tile.cell then
@@ -124,6 +128,7 @@ function Renderer:partition(partition)
 				mesh:Destroy()
 				mesh = fixed meshes[#meshes] = fixed
 				local part = AssetService:CreateMeshPartAsync(Content.fromObject(mesh))
+				part.Parent=group -- Own the part before any subsequent yielding API.
 				part.Anchored = true part.CanCollide = false part.CanTouch=false part.CanQuery=false part.CastShadow=false part.DoubleSided = batch.doubleSided
 				part.Material = Enum.Material.SmoothPlastic part.Color = Color3.new(1, 1, 1)
 				part.CFrame = CFrame.new(center)
@@ -139,6 +144,9 @@ function Renderer:partition(partition)
 				part.Parent = group
 			end
 		end)
+		if generation~=self.generation then
+			group:Destroy() for _,mesh in ipairs(meshes) do mesh:Destroy() end return false
+		end
 		if ok then rendered = true else
 			for _, mesh in ipairs(meshes) do mesh:Destroy() end meshes = {}
 			self.meshAvailable = false self.retryAt=os.clock()+1 group:ClearAllChildren() warn("Mineblox mesh fallback:", err)
@@ -165,6 +173,7 @@ function Renderer:partition(partition)
 	end
 	if previous then destroy(previous) end
 	group.Parent = self.root self.parts[partition.key] = { group = group, revision = partition.revision, meshes = meshes, degraded=not rendered, retryAt=os.clock()+1, center=(Vector3.new(table.unpack(partition.origin))+Vector3.new(4,4,4))*SCALE,triangles=rendered and triangles or #group:GetChildren()*12,buildMs=(os.clock()-buildStarted)*1000 }
+	return true
 end
 function Renderer:visibility(camera)
 	local visible,triangles=0,0
@@ -177,9 +186,11 @@ function Renderer:visibility(camera)
 end
 function Renderer:apply(world)
 	if self.epoch ~= world.epoch then self:clear() self.epoch = world.epoch end
+	local generation=self.generation
 	local active = {} for _, key in ipairs(world.active) do active[key] = true end
 	for key, entry in pairs(self.parts) do if not active[key] then destroy(entry) self.parts[key] = nil end end
-	for _, partition in ipairs(world.partitions) do self:partition(partition) end
+	for _, partition in ipairs(world.partitions) do self:partition(partition) if generation~=self.generation then return false end end
 	self.count = 0 for _ in pairs(self.parts) do self.count += 1 end
+	return true
 end
 return Renderer

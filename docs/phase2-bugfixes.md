@@ -122,6 +122,49 @@ cleared by the fresh playtest. All 86 unit tests, two integration tests and the
 JavaScript/Luau gates passed. Device budgets and larger forest walks still need
 coverage; bounded fallback remains explicit if allocation fails elsewhere.
 
+## October 9 respawn, entity and water follow-up
+
+Terrain builders carry a generation across yielding mesh APIs. Resets cancel
+stale work instead of allowing it to replace current partitions; the client
+acknowledges completed builds only in the current session/epoch. A populated
+atlas survives world resets when its catalog is unchanged. The private Studio
+fixture in `tests/studio-render.luau` passed a reset during a real yielding build,
+retained-pixel reads and a textured, double-sided water mesh. This addresses a
+reset race, rather than proving every possible black-texture cause is resolved.
+
+Entity geometry is a pure module with explicit supported species and skin bounds
+checks. Serial, generation-scoped preparation retries allocation failures with
+bounded backoff. Private skins cover 14 mob species plus the default player.
+The gallery checked actual skin dimensions and Minecraft height scaling,
+including the modern 32x32 bat and separate sheep wool. Creeper parts connect;
+modern player left limbs use their own skin regions. Fallback animation restores
+each part's original color instead of turning it white. Walk/flap cycles remain
+approximate; sheep variants/shearing, babies, equipment, fish and other unsupported
+species remain incomplete.
+
+The personal inventory removes its overlapping Inventory heading and fits its
+Steve preview to measured bounds, viewport aspect and field of view. Pure fit
+and limb UV invariants passed; the private screenshot showed the full model with
+margins. Existing serial inventory transactions are retained.
+
+Water-containing plant and waterlogged neighbors no longer produce interior
+walls. Loaded partition halos retain those states, and water above fills the
+column. Double-sided surfaces are visible underwater. Fog checks the eye against
+canonical fluid height, falling back to server swimming only in unknown terrain;
+celestial panels/clouds are hidden while immersed. Minecraft still owns all
+fluid simulation and world generation.
+
+A separate spectator test player extracted the user's ocean without respawning
+the dead user or changing inventory: 75 partitions, 701 aquatic plant voxels,
+1,097 water quads and zero water faces into aquatic plants. An isolated Studio
+probe rendered 21 water parts with no missing materials and visible overhead
+surfaces. Probe geometry and camera overrides were removed. Source-height gaps
+around plant surfaces, sloped/animated flow, waterlogged void geometry and exact
+underwater sky/biome fog remain incomplete. All 89 unit tests, two real TCP tests
+and JavaScript/Luau checks passed. Local worker roundtrip samples are recorded in
+[water-entity-bugfix-2026-10-09.json](measurements/water-entity-bugfix-2026-10-09.json);
+they are not paired CPU, FPS, WAN or device improvements.
+
 ## Remaining work
 
 Recipe book, full creative categories, creative/spectator flight, effects/vehicles,

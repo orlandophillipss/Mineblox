@@ -2,6 +2,41 @@ local Prediction=require("../roblox/Prediction")
 local World=require("../roblox/World")
 local Interpolation=require("../roblox/Interpolation")
 local Visibility=require("../roblox/Visibility")
+local EntityLoad=require("../roblox/EntityLoad")
+local loading=EntityLoad.new()
+local first=loading:start("enderman",0) assert(first and not loading:start("sheep",0),"mob template allocation is serial")
+assert(loading:finish(first,0,true),"failed allocation releases the work slot")
+assert(not loading:start("enderman",4.99),"packet frequency cannot bypass allocation backoff")
+local retry=loading:start("enderman",5) assert(retry,"temporary allocation denial can recover")
+loading:finish(retry,5,true) assert(not loading:start("enderman",14.99),"repeated failure backs off")
+local old=loading:start("sheep",6) loading:reset() local fresh=loading:start("sheep",6)
+assert(not loading:finish(old,7,false) and not loading:start("chicken",7),"stale completion cannot release new-generation work")
+assert(loading:finish(fresh,7,false) and loading:start("enderman",7),"reset invalidates old backoff and success releases the slot")
+local EntityDefinitions=require("../roblox/EntityDefinitions")
+for _,name in ipairs({"pig","cow","creeper","zombie","skeleton","player","enderman","sheep","chicken","spider","cave_spider","husk","stray","wither_skeleton","bat"}) do
+	local parts=EntityDefinitions.get(name) assert(parts and #parts>=6,"supported mob must have articulated geometry")
+	local seen={}
+	for _,part in ipairs(parts) do
+		assert(not seen[part.name],"rig part names are unique") seen[part.name]=true
+		local w,h,d=table.unpack(part.size) local u,v=table.unpack(part.uv)
+		local height=(name=="player" or name=="zombie" or name=="husk") and 64 or 32 local width=name=="bat" and 32 or 64
+		assert(w>0 and h>0 and (d>0 or d==0 and part.card) and u>=0 and v>=0 and u+2*w+2*d<=width and v+d+h<=height,"cuboid skin net stays inside the supported texture")
+	end
+end
+assert(EntityDefinitions.get("unknown_mod_mob")==nil,"unsupported species cannot silently receive a humanoid skin")
+local playerParts=EntityDefinitions.get("player") local playerNets={}
+for _,part in ipairs(playerParts) do playerNets[part.name]=part.uv end
+assert(playerNets.Arm1[2]==48 and playerNets.Leg1[2]==48 and playerNets["Arm-1"][2]==16 and playerNets["Leg-1"][2]==16,"modern player skin preserves separate left and right limb texture nets")
+local creeperParts=EntityDefinitions.get("creeper")
+local head,body=creeperParts[1],creeperParts[2] local leg=creeperParts[3]
+assert(head.position[2]-head.size[2]/2==body.position[2]+body.size[2]/2 and body.position[2]-body.size[2]/2==leg.position[2]+leg.size[2]/2,"Creeper head, body and legs connect without a floating gap")
+local Fit=require("../roblox/ViewportFit")
+for _,aspect in ipairs({153/210,.25,2}) do
+	local distance=Fit.distance(3.6,7.2,2,aspect,28,.86)
+	local visibleHeight=2*(distance-1)*math.tan(math.rad(28)/2)
+	assert(visibleHeight>=7.2/.86 and visibleHeight*aspect>=3.6/.86,"player preview fits vertically and horizontally with margin")
+end
+print("Entity geometry, texture bounds, bounded retries and generation ownership passed")
 local world={get=function(_,_,y,_)return {name=y<0 and "stone" or "air"}end,boxes=function()return {{-100,-1,-100,100,0,100}}end}
 local function state()return {position={x=0,y=0,z=0},velocity={x=0,y=-.0784,z=0},onGround=true}end
 local frame={controls=1,yaw=0,seq=1,clientTimeMs=0}
@@ -83,6 +118,13 @@ local fluidWorld=setmetatable({get=function(_,x,y,z)
 end},{__index=World})
 local liquid,current=fluidWorld:fluid({x=.5,y=0,z=.5})
 assert(liquid=="water" and math.abs(current.x)<=.014,"source water occupancy and bounded current")
+assert(fluidWorld:submerged({x=.5,y=.8,z=.5})=="water","eyes below the source surface are submerged")
+assert(fluidWorld:submerged({x=.5,y=.95,z=.5})==false,"eyes above the surface stay dry even when body is swimming")
+assert(fluidWorld:submerged({x=1.5,y=.6,z=.5})==false,"flowing water uses the actual lower surface")
+local aquatic=setmetatable({get=function(_,x,y,z) return y==0 and {name="kelp",properties={}} or {name="air"} end},{__index=World})
+assert(aquatic:submerged({x=.5,y=.5,z=.5})=="water","camera recognizes water inside kelp")
+local unknown=setmetatable({get=function() return nil end},{__index=World})
+assert(unknown:submerged({x=0,y=0,z=0})==nil,"missing terrain has an explicit unknown camera medium")
 local swim=state() swim.position.y=0
 fluidWorld.boxes=function()return {}end
 for _=1,10 do swim=Prediction.step(swim,{controls=16,yaw=0},fluidWorld)end

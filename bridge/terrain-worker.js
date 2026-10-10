@@ -1,7 +1,7 @@
 import { parentPort } from 'node:worker_threads';
 import { VoxelRegion } from './voxels.js';
 import { greedyMesh } from './mesh.js';
-import { fluidHeight } from './fluid.js';
+import { fluidHeight, fluidKind } from './fluid.js';
 
 parentPort.on('message', ({ id, origin, data, palette, neighbors = {} }) => {
   try {
@@ -74,7 +74,7 @@ parentPort.on('message', ({ id, origin, data, palette, neighbors = {} }) => {
                   1,
                   fluidHeight(
                     p.properties.level,
-                    at(x, y + 1, z)?.name === p.name,
+                    fluidKind(at(x, y + 1, z)) === p.name,
                   ),
                   1,
                 ],
@@ -87,7 +87,8 @@ parentPort.on('message', ({ id, origin, data, palette, neighbors = {} }) => {
                   const neighbor = [x, y, z];
                   neighbor[axis] += sign;
                   const n = at(...neighbor);
-                  if (n?.name === p.name || (n?.cube && n?.opaque)) continue;
+                  if (fluidKind(n) === p.name || (n?.cube && n?.opaque))
+                    continue;
                 }
                 const u = (axis + 1) % 3,
                   v = (axis + 2) % 3;

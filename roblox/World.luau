@@ -38,6 +38,16 @@ local function depth(block)
 	local level=tonumber(block.properties and block.properties.level) or 0
 	return level>=8 and 0 or level,block.name=="lava" and "lava" or "water",level>=8
 end
+-- Camera medium is presentation only. Body swimming state must not submerge
+-- the camera while the player's eyes are above the server's fluid surface.
+function World:submerged(point)
+	local x,y,z=math.floor(point.x),math.floor(point.y),math.floor(point.z)
+	local block=self:get(x,y,z) if not block then return nil end
+	local level,kind=depth(block) if not level then return false end
+	local aboveKind=select(2,depth(self:get(x,y+1,z)))
+	local height=aboveKind==kind and 1 or (8-level)/9
+	return point.y<y+height and kind or false
+end
 function World:fluid(p)
 	local current={x=0,y=0,z=0} local liquid=nil
 	-- Contracted body bounds match the mature Java client physics. Currents

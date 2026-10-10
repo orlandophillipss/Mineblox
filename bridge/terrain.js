@@ -271,8 +271,10 @@ export class TerrainService {
               const cube =
                 shapes.length === 1 &&
                 shapes[0].every((n, i) => n === (i < 3 ? 0 : 1));
-              if (cube || ['water', 'lava'].includes(block.name))
-                neighbors[at.join(',')] = block.stateId;
+              // Fluid occupancy includes plants and waterlogged models, not just
+              // water blocks. Preserve the loaded halo rather than creating
+              // artificial walls around aquatic vegetation at partition seams.
+              neighbors[at.join(',')] = block.stateId;
               if (!palette.has(block.stateId))
                 palette.set(block.stateId, {
                   state: block.stateId,

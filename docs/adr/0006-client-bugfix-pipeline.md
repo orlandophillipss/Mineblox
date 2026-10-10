@@ -73,7 +73,22 @@ a calibrated presentation approximation, including in caves; it does not consume
 server block/sky light or change Minecraft time and gameplay. A temporary client
 night preview was cleared by source sync and a fresh playtest.
 
-Sources: [Minecraft 1.21.4 item definitions](https://www.minecraft.net/en-us/article/minecraft-java-edition-1-21-4),
+October 9 reset work carries renderer generations across yielding APIs, retains
+valid atlas images for unchanged catalogs and acknowledges only current builds.
+Entity templates have a serial generation-scoped loader and bounded retry backoff;
+pure geometry makes UV and connected-part checks independent of allocation APIs.
+Unsupported species stay explicit. Nearest skin expansion is 4x rather than 8x,
+reducing each expanded skin's pixel memory to one quarter without changing sources.
+
+Fluid occlusion recognizes water-containing vegetation and waterlogged neighbors
+across loaded halos, following the upstream renderer's plant/waterlogged checks.
+Water is double-sided; eye immersion controls approximate fog and celestial
+visibility. This is rendering of authoritative states, not a local fluid simulation.
+Sloped/animated surfaces and waterlogged model voids remain unfinished.
+
+Sources: [Prismarine fluid rendering](https://github.com/PrismarineJS/prismarine-viewer/blob/master/viewer/lib/models.js),
+[Roblox mesh face visibility](https://create.roblox.com/docs/reference/engine/classes/MeshPart#DoubleSided),
+[Minecraft 1.21.4 item definitions](https://www.minecraft.net/en-us/article/minecraft-java-edition-1-21-4),
 [version-specific model format](https://docs.neoforged.net/docs/1.21.4/resources/client/models/),
 [SurfaceAppearance](https://create.roblox.com/docs/reference/engine/classes/SurfaceAppearance),
 [EditableMesh](https://create.roblox.com/docs/reference/engine/classes/EditableMesh),

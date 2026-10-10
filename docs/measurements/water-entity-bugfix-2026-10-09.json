@@ -1,0 +1,10 @@
+{
+  "date": "2026-10-09T20:18:06.492Z",
+  "partitions": 75,
+  "waterQuads": 1097,
+  "aquaticVoxels": 701,
+  "waterFacesIntoPlants": 0,
+  "workerRoundtripMedianMs": 0.6711999999997715,
+  "workerRoundtripP95Ms": 1.0770999999995183,
+  "note": "Local single-player ocean extraction and worker roundtrip. No paired gain, WAN or device performance claim."
+}

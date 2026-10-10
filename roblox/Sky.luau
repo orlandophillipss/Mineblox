@@ -52,12 +52,15 @@ function Sky:state(state)
 	if state.timeOfDay then self.time=state.timeOfDay self.at=os.clock() end
 	self.day=state.day or 0 self.dimension=state.dimension self.inWater=state.inWater
 end
-function Sky:tick(camera)
+function Sky:tick(camera,world)
 	local center=camera.CFrame.Position
+	local point=center/4
+	local medium=world and world:submerged({x=point.X,y=point.Y,z=point.Z})
+	local underwater=medium=="water" or medium==nil and self.inWater
 	local time=(self.time+(os.clock()-self.at)*20)%24000 local angle=time/24000*math.pi*2
 	local sunDirection=Vector3.new(-math.cos(angle),math.sin(angle),0)
-	if self.sun then self.sun.CFrame=CFrame.lookAt(center+sunDirection*48,center) self.sunLabel.Visible=sunDirection.Y>0 end
-	if self.moonPart then self.moonPart.CFrame=CFrame.lookAt(center-sunDirection*48,center) self.moonLabel.Visible=sunDirection.Y<0 end
+	if self.sun then self.sun.CFrame=CFrame.lookAt(center+sunDirection*48,center) self.sunLabel.Visible=not underwater and sunDirection.Y>0 end
+	if self.moonPart then self.moonPart.CFrame=CFrame.lookAt(center-sunDirection*48,center) self.moonLabel.Visible=not underwater and sunDirection.Y<0 end
 	if os.clock()-self.updated<.1 then return end self.updated=os.clock()
 	local daylight=math.clamp(math.sin(angle)*1.3+.2,0,1)
 	-- Direct Roblox solar lighting introduces broad specular highlights even
@@ -67,13 +70,14 @@ function Sky:tick(camera)
 	-- black. Keep nighttime terrain readable while the sky/fog remain dark.
 	-- This is approximate illumination, not Minecraft block/sky light data.
 	Lighting.Ambient=Color3.fromRGB(180,185,200):Lerp(Color3.new(1,1,1),daylight) Lighting.OutdoorAmbient=Lighting.Ambient
-	Lighting.FogColor=self.inWater and Color3.fromRGB(25,55,115) or Color3.fromRGB(20,24,38):Lerp(Color3.fromRGB(156,190,239),daylight)
-	Lighting.FogStart=self.inWater and 4 or 96 Lighting.FogEnd=self.inWater and 40 or 192
+	Lighting.FogColor=underwater and Color3.fromRGB(25,55,115) or Color3.fromRGB(20,24,38):Lerp(Color3.fromRGB(156,190,239),daylight)
+	Lighting.FogStart=underwater and 4 or 96 Lighting.FogEnd=underwater and 40 or 192
 	local night=daylight<.2
-	if night~=self.night then self.night=night cubemap(self.sky,night and SkyAssets.night or SkyAssets.day) self.sky.StarCount=night and 1200 or 0 end
+	if night~=self.night then self.night=night cubemap(self.sky,night and SkyAssets.night or SkyAssets.day) end
+	self.sky.StarCount=not underwater and night and 1200 or 0
 	if self.moon and self.phase~=(self.day%8) then self.phase=self.day%8 local origin=Vector2.new((self.phase%4)*self.moonSize.X,math.floor(self.phase/4)*self.moonSize.Y) self.moon:WritePixelsBuffer(Vector2.zero,self.moonSize,self.moonSource:ReadPixelsBuffer(origin,self.moonSize)) end
 	if self.cloud then
-		self.cloud.Transparency=(self.dimension=="overworld" or self.dimension=="minecraft:overworld") and .15 or 1
+		self.cloud.Transparency=not underwater and (self.dimension=="overworld" or self.dimension=="minecraft:overworld") and .15 or 1
 		local center=Vector3.new(math.floor(camera.CFrame.Position.X/512)*512,192*4,math.floor(camera.CFrame.Position.Z/512)*512)
 		-- Project only the decorative sky plane closer, preserving its angular
 		-- size and world UV position. Terrain/gameplay coordinates stay untouched.

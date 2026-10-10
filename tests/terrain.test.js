@@ -47,6 +47,84 @@ test('high players keep loaded ground surface bands without scanning voxels or r
 import { VirtualPlayer } from '../bridge/session.js';
 import { fakeBot } from './helpers.js';
 
+test('water omits plant and waterlogged interiors inside partitions and across their halo', async (t) => {
+  const terrain = new TerrainService();
+  t.after(() => terrain.close());
+  for (const block of [
+    { name: 'kelp' },
+    { name: 'kelp_plant' },
+    { name: 'seagrass' },
+    { name: 'tall_seagrass' },
+    { name: 'bubble_column' },
+    { name: 'oak_slab', properties: { waterlogged: 'true' } },
+  ]) {
+    const data = new Uint32Array(512);
+    data[7] = 1;
+    data[71] = 2; // Above the water, inside the partition.
+    const palette = [
+      {
+        state: 1,
+        name: 'water',
+        cube: false,
+        shapes: [],
+        properties: { level: 0 },
+      },
+      { state: 2, cube: false, shapes: [], ...block },
+    ];
+    const quads = await terrain.mesh({
+      origin: [0, 0, 0],
+      data,
+      palette,
+      neighbors: { '8,0,0': 2 },
+    });
+    const water = quads.filter((q) => q[7] === 1);
+    assert.equal(water.length, 4);
+    assert.ok(
+      !water.some(
+        (q) => (q[0] === 0 && q[1] === 1) || (q[0] === 1 && q[1] === 1),
+      ),
+    );
+    assert.equal(
+      water.find((q) => q[0] === 0)[6],
+      1,
+      'water-containing block above fills the column',
+    );
+  }
+});
+
+test('extraction retains aquatic vegetation in the loaded halo for fluid culling', async (t) => {
+  const bot = fakeBot();
+  bot.entity.position = new Vec3(0, 0, 0);
+  bot.blockAt = (p) => ({
+    stateId: p.x === -1 ? 2 : 1,
+    name: p.x === -1 ? 'kelp_plant' : 'water',
+    transparent: true,
+    shapes: [],
+    getProperties: () => ({ level: 0 }),
+  });
+  const player = new VirtualPlayer({
+    robloxId: '1',
+    createBot: () => bot,
+    minecraft: {},
+  });
+  bot.emit('spawn');
+  const terrain = new TerrainService();
+  t.after(async () => {
+    player.close();
+    await terrain.close();
+  });
+  const partition = await terrain.partition(
+    player,
+    terrain.state(player),
+    '0,0,0',
+  );
+  assert.equal(
+    partition.quads.length,
+    0,
+    'fully submerged volume has no artificial seam walls',
+  );
+});
+
 test('the real terrain worker meshes water and lava levels and culls boundary neighbors', async (t) => {
   const terrain = new TerrainService();
   t.after(() => terrain.close());

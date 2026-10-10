@@ -3,6 +3,7 @@ local Images=require(script.Parent.Images)
 local ItemVisual=require(script.Parent.ItemVisual)
 local EntityVisual=require(script.Parent.EntityVisual)
 local Inventory=require(script.Parent.Inventory)
+local ViewportFit=require(script.Parent.ViewportFit)
 local Interface={} Interface.__index=Interface
 local function mousePosition()
 	-- Absolute GUI coordinates and GetGuiObjectsAtPosition exclude the top bar.
@@ -24,7 +25,7 @@ function Interface.new(gui,send)
 	self.background=Instance.new("ImageLabel") self.background.BackgroundTransparency=1 self.background.Size=UDim2.fromScale(1,1) self.background.ResampleMode=Enum.ResamplerMode.Pixelated self.background.ImageRectSize=Vector2.new(176,166) self.background.Parent=self.root self.background.ZIndex=0
 	local inventoryImage=Images.gui("inventory") if inventoryImage then self.background.ImageContent=Content.fromObject(inventoryImage) end
 	self.preview=Instance.new("ViewportFrame") self.preview.BackgroundTransparency=1 self.preview.Size=UDim2.fromOffset(153,210) self.preview.Position=UDim2.fromOffset(78,24) self.preview.Ambient=Color3.fromRGB(180,180,180) self.preview.LightColor=Color3.new(1,1,1) self.preview.Parent=self.root
-	local previewCamera=Instance.new("Camera") previewCamera.FieldOfView=28 previewCamera.CFrame=CFrame.lookAt(Vector3.new(6,5,14),Vector3.new(0,3.6,0)) previewCamera.Parent=self.preview self.preview.CurrentCamera=previewCamera
+	local previewCamera=Instance.new("Camera") previewCamera.FieldOfView=28 previewCamera.Parent=self.preview self.preview.CurrentCamera=previewCamera
 	self.title=Font.label(self.root,"Inventory",UDim2.fromOffset(520,24),UDim2.fromOffset(12,8)) self.title.TextColor3=Color3.fromRGB(40,40,40) self.title.TextXAlignment=Enum.TextXAlignment.Left
 	self.craftingTitle=Font.label(self.root,"Crafting",UDim2.fromOffset(220,24),UDim2.fromOffset(291,15)) self.craftingTitle.TextColor3=Color3.fromRGB(40,40,40) self.craftingTitle.TextXAlignment=Enum.TextXAlignment.Left self.craftingTitle.TextSize=24
 	self.title:SetAttribute("BitmapShadow",false) self.craftingTitle:SetAttribute("BitmapShadow",false)
@@ -114,7 +115,12 @@ function Interface:update(state)
 	if not self.previewModel or self.previewGeneration~=EntityVisual.generation then
 		if self.previewModel then self.previewModel:Destroy() self.previewModel=nil end
 		local model=EntityVisual.create({type="player",name="player",id=0,height=1.8})
-		if model then self.previewModel=model self.previewGeneration=EntityVisual.generation model.Parent=self.preview model:PivotTo(CFrame.Angles(0,math.pi-.3,0)) end
+		if model then
+			self.previewModel=model self.previewGeneration=EntityVisual.generation model.Parent=self.preview model:PivotTo(CFrame.Angles(0,math.pi-.25,0))
+			local bounds,size=model:GetBoundingBox() local center=bounds.Position
+			local distance=ViewportFit.distance(size.X,size.Y,size.Z,self.preview.Size.X.Offset/self.preview.Size.Y.Offset,self.preview.CurrentCamera.FieldOfView,.86)
+			self.preview.CurrentCamera.CFrame=CFrame.lookAt(center+Vector3.new(0,0,distance),center)
+		end
 	end
 	self.transactions:update(state)
 	for _,entry in ipairs(self.catalogSlots or {}) do
@@ -149,10 +155,11 @@ function Interface:update(state)
 	local backgroundImage=Images.gui(crafting and "crafting" or "inventory")
 	if backgroundImage then self.background.ImageContent=Content.fromObject(backgroundImage) end
 	self.title.Text=vanilla and "Inventory" or inv.title or string.gsub(inv.type,"minecraft:","")
-	self.title.Position=inv.id==0 and UDim2.fromOffset(24,218) or UDim2.fromOffset(12,8) self.title.TextSize=inv.id==0 and 24 or 16
-	self.title.Position=vanilla and UDim2.fromOffset(24,218) or UDim2.fromOffset(12,8)
-	self.background.Visible=vanilla and backgroundImage~=nil self.preview.Visible=inv.id==0 self.craftingTitle.Visible=vanilla self.title.Visible=true
-	self.craftingTitle.Position=crafting and UDim2.fromOffset(84,15) or UDim2.fromOffset(291,15)
+	self.title.TextSize=vanilla and 24 or 16 self.title.Position=vanilla and UDim2.fromOffset(24,216) or UDim2.fromOffset(12,8)
+	-- The personal inventory only labels Crafting. An Inventory label here
+	-- overlaps the character plate; container/crafting-table windows keep it.
+	self.background.Visible=vanilla and backgroundImage~=nil self.preview.Visible=inv.id==0 self.craftingTitle.Visible=vanilla self.title.Visible=inv.id~=0
+	self.craftingTitle.Position=crafting and UDim2.fromOffset(84,18) or UDim2.fromOffset(291,18)
 	self.root.BackgroundTransparency=self.background.Visible and 1 or 0
 	local rows=math.ceil((inv.inventoryStart or 0)/9)
 	local height=vanilla and 498 or 60+(rows+4)*54+12 local width=vanilla and 528 or 580

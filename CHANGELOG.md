@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.2.0-beta.7 — 2026-10-09
+
+- Fixed artificial water walls around kelp, seagrass, bubble columns and
+  waterlogged neighbors, including partition seams. Water meshes show both sides;
+  underwater fog follows the camera's actual immersion rather than body swimming.
+- Cancelled terrain builds cannot commit after a respawn or content reset. Valid
+  atlas objects survive world resets; only completed current builds are acknowledged.
+- Expanded private textured mob presentation to endermen, sheep, chickens,
+  spiders, cave spiders, husks, strays, wither skeletons and modern bats. Failed
+  templates retry serially with bounded backoff; fallbacks retain their color.
+- Fixed creeper body/leg spacing and modern player left-limb skin coordinates.
+  Inventory previews fit their actual bounds and the overlapping personal
+  Inventory heading is removed.
+- Verified local worker, client, real TCP and isolated Studio rendering checks.
+  Fluid slopes/animation, complete mob variants and native light remain incomplete.
+  Private Minecraft assets are not included in either release archive.
+
 ## 0.2.0-beta.6 — 2026-10-09
 
 - Raised the client's nighttime ambient floor so shaded block textures stay

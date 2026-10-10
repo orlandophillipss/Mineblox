@@ -176,6 +176,16 @@ for (const [name, relative] of Object.entries({
   creeper: 'creeper/creeper',
   zombie: 'zombie/zombie',
   skeleton: 'skeleton/skeleton',
+  enderman: 'enderman/enderman',
+  bat: 'bat',
+  sheep: 'sheep/sheep',
+  sheep_wool: 'sheep/sheep_fur',
+  chicken: 'chicken',
+  spider: 'spider/spider',
+  cave_spider: 'spider/cave_spider',
+  husk: 'zombie/husk',
+  stray: 'skeleton/stray',
+  wither_skeleton: 'skeleton/wither_skeleton',
   player: 'player/wide/steve',
 })) {
   try {
