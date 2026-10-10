@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.2.0-beta.8 — 2026-10-10
+
+- Rebuilt creative browsing with category tabs, five rows, real hotbar targets,
+  scrolling/search and carried-item preview cleanup. Compiled private GUI icons
+  remove per-icon runtime meshes and persistent loading placeholders.
+- Added first-person item display transforms and extruded sprite edges; held tools
+  no longer use one generic flat-card pose. Reduced the world-item template cap
+  to 32; terrain shares one build buffer and deduplicates mesh attributes.
+- Added full-texture predicted placement with bounded local collision/selection
+  overlays, rejection/expiry cleanup, and serial Minecraft placement confirmation.
+  Suppressed small grounded idle presentation drift.
+- Added authoritative fluid-level corner slopes and diagonal seam invalidation,
+  versioned geometry negotiation, a larger bounded launcher interest radius,
+  loaded eye skylight for canopy/cave fog, and cutout sun/moon/cloud presentation.
+- Expanded plant model preparation and fish/projectile/zombie-villager geometry,
+  equipped-item presentation, and SurfaceAppearance-aware hurt tint.
+- Added an optional permitted audio-bank compiler, weighted event manifests,
+  upload/binding support, a bounded native AudioPlayer pool and category volumes.
+  Creator Store effects remain the fallback; no Minecraft recordings are bundled.
+- This remains a development prerelease. Exact creative ordering, special item
+  models, fish dye/pattern variants, water animation, native face light, WAN/device
+  load testing and an end-to-end game completion remain unfinished. See the
+  October 10 validation notes and optional audio-bank guide.
+
 ## 0.2.0-beta.7 — 2026-10-09
 
 - Fixed artificial water walls around kelp, seagrass, bubble columns and

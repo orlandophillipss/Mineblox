@@ -4,6 +4,7 @@ import { PNG } from 'pngjs';
 import { AssetStore, resolveTexture } from '../bridge/assets.js';
 import minecraftData from 'minecraft-data';
 import { compileItem, auditItems } from '../bridge/item-models.js';
+import { renderItemIcon, extrudeSprite } from './item-icons.js';
 const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex');
 const fingerprint = sha256(
   Buffer.concat(
@@ -13,6 +14,7 @@ const fingerprint = sha256(
         'bridge/assets.js',
         'bridge/models.js',
         'bridge/item-models.js',
+        'tools/item-icons.js',
       ].map((f) => readFile(f)),
     ),
   ),
@@ -175,6 +177,7 @@ for (const [name, relative] of Object.entries({
   cow: 'cow/cow',
   creeper: 'creeper/creeper',
   zombie: 'zombie/zombie',
+  zombie_villager: 'zombie_villager/zombie_villager',
   skeleton: 'skeleton/skeleton',
   enderman: 'enderman/enderman',
   bat: 'bat',
@@ -187,11 +190,42 @@ for (const [name, relative] of Object.entries({
   stray: 'skeleton/stray',
   wither_skeleton: 'skeleton/wither_skeleton',
   player: 'player/wide/steve',
+  cod: 'fish/cod',
+  tropical_fish: 'fish/tropical_a',
+  tropical_fish_large: 'fish/tropical_b',
+  arrow: 'projectiles/arrow',
+  spectral_arrow: 'projectiles/spectral_arrow',
 })) {
   try {
     entities[name] = await image(
       `assets/minecraft/textures/entity/${relative}.png`,
     );
+    if (name === 'zombie_villager') {
+      // The base skin deliberately leaves clothing transparent. A vanilla
+      // biome clothing layer is necessary before displaying this model.
+      const clothing = await image(
+        'assets/minecraft/textures/entity/zombie_villager/type/plains.png',
+      );
+      const base = images[entities[name]],
+        overlay = images[clothing];
+      if (base.width !== overlay.width || base.height !== overlay.height)
+        throw new Error('Villager clothing dimensions differ');
+      const pixels = Buffer.from(base.hex, 'hex'),
+        top = Buffer.from(overlay.hex, 'hex');
+      for (let i = 0; i < pixels.length; i += 4) {
+        const a = top[i + 3] / 255,
+          b = pixels[i + 3] / 255,
+          alpha = a + b * (1 - a);
+        for (let c = 0; c < 3; c++)
+          pixels[i + c] = alpha
+            ? Math.round((top[i + c] * a + pixels[i + c] * b * (1 - a)) / alpha)
+            : 0;
+        pixels[i + 3] = Math.round(alpha * 255);
+      }
+      const key = 'private/entities/zombie_villager/default';
+      images[key] = { ...base, hex: pixels.toString('hex') };
+      entities[name] = key;
+    }
   } catch (error) {
     console.warn(`Entity ${name}: ${error.message}`);
   }
@@ -199,32 +233,14 @@ for (const [name, relative] of Object.entries({
 const catalog = {};
 const registry = minecraftData('1.21.4');
 const blockFailures = [];
-const blockNames = [
-  ...new Set([
-    'oak_stairs',
-    'oak_slab',
-    'oak_fence',
-    'oak_fence_gate',
-    'oak_door',
-    'oak_trapdoor',
-    'torch',
-    'wall_torch',
-    'short_grass',
-    'fern',
-    'dandelion',
-    'poppy',
-    'glass_pane',
-    'stone_stairs',
-    'stone_slab',
-    ...registry.blocksArray
-      .filter((block) =>
-        /_(stairs|slab|fence|fence_gate|wall|door|trapdoor|pane|sapling)$/.test(
-          block.name,
-        ),
-      )
-      .map((block) => block.name),
-  ]),
-];
+// World coverage must not depend on an item icon or a suffix whitelist.
+// Built-in entity renderers remain explicit unresolved entries in the audit.
+const blockNames = registry.blocksArray
+  .filter(
+    (block) =>
+      !['air', 'cave_air', 'void_air', 'water', 'lava'].includes(block.name),
+  )
+  .map((block) => block.name);
 let nextBlock = 0;
 async function prepareBlock(name) {
   try {
@@ -238,6 +254,8 @@ async function prepareBlock(name) {
     const models = {};
     for (const reference of new Set(values.map((v) => v.model))) {
       const model = await store.model(reference);
+      if (!model.elements?.length)
+        throw new Error(`No static geometry: ${reference}`);
       for (const element of model.elements ?? [])
         for (const face of Object.values(element.faces ?? {}))
           await image(resolveTexture(model.textures, face.texture));
@@ -297,6 +315,22 @@ for (const [name, file] of Object.entries({
     gui[name] = await image(
       `assets/minecraft/textures/environment/${file}.png`,
     );
+    if (name === 'sun' || name === 'moon') {
+      // Java's additive celestial pass treats black as no contribution.
+      // Roblox ImageLabel alpha blending needs an explicit equivalent mask.
+      const source = images[gui[name]];
+      const pixels = Buffer.from(source.hex, 'hex');
+      for (let i = 0; i < pixels.length; i += 4) {
+        const alpha = Math.max(pixels[i], pixels[i + 1], pixels[i + 2]);
+        pixels[i + 3] = alpha;
+        if (alpha)
+          for (let c = 0; c < 3; c++)
+            pixels[i + c] = Math.round((pixels[i + c] * 255) / alpha);
+      }
+      const key = `private/celestial/${name}`;
+      images[key] = { ...source, hex: pixels.toString('hex') };
+      gui[name] = key;
+    }
   } catch (error) {
     console.warn(`Environment ${name}: ${error.message}`);
   }
@@ -456,6 +490,15 @@ async function prepareItem(name) {
   try {
     const compiled = await compileItem(store, name, image, composedSprite);
     compiled.blockItem = Boolean(registry.blocksByName[name]);
+    if (compiled.kind === 'mesh') {
+      const key = `private/item-icons/${name}`;
+      images[key] = renderItemIcon(compiled, images);
+      compiled.guiTexture = key;
+    } else {
+      compiled.worldFaces = extrudeSprite(images[compiled.texture]).map(
+        (face) => ({ ...face, texture: compiled.texture }),
+      );
+    }
     itemModels[name] = compiled;
     if (compiled.kind === 'sprite') items[name] = compiled.texture;
     if (

@@ -2,12 +2,15 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createGateway } from '../bridge/gateway.js';
 import { fakeBot } from './helpers.js';
+import { Vec3 } from 'vec3';
 
 const token = 'a'.repeat(32);
 async function setup(
   t,
   factory = () => {
     const bot = fakeBot();
+    bot.blockAt = () => null;
+    bot.entity.position = new Vec3(1, 64, -2);
     setImmediate(() => bot.emit('spawn'));
     return bot;
   },
@@ -54,6 +57,30 @@ test('authenticated session lifecycle, batched movement, version rejection, and 
     robloxId: '1',
   });
   assert.equal(first.status, 201);
+  const terrain = await request('/v1/terrain', 'POST', {
+    version: 1,
+    players: [
+      {
+        id: first.body.id,
+        format: 'state-adaptive-xzy-v2',
+        meshFormat: 'quad-fluid-corners-v2',
+      },
+    ],
+  });
+  assert.equal(
+    terrain.status,
+    200,
+    'geometry negotiation passes through the authenticated gateway',
+  );
+  assert.equal(
+    (
+      await request('/v1/terrain', 'POST', {
+        version: 1,
+        players: [{ id: first.body.id, meshFormat: 'untrusted' }],
+      })
+    ).status,
+    426,
+  );
   assert.equal(
     (await request('/v1/sessions', 'POST', { version: 1, robloxId: '1' }))
       .status,

@@ -1,5 +1,39 @@
 # Mineblox development protocol v1
 
+## October 10 presentation extensions
+
+Snapshot `skyVisible` reports a loaded-column vertical roof check; `skyLight`
+reports the loaded authoritative light nibble at eye height (0..15, or null).
+These are presentation metadata, not block/face lighting or gameplay claims.
+Entities optionally carry a packed `variant` and primary-hand `heldItem` name/count
+from Mineflayer metadata/equipment. Species, texture and component coverage remain
+limited by the private renderer audit.
+
+Catalog intentions accept a bounded `tab` identifier as well as query/offset.
+Results contain a total, offset and at most 64 registry items. Category membership
+uses version-pinned registry/name filters; it is not an exact vanilla tab sequence.
+Creative slot writes remain gated by the Minecraft player's mode and actual
+server inventory transaction. UI cursor previews cannot grant inventory stacks.
+
+Terrain requests optionally negotiate `meshFormat: "quad-fluid-corners-v2"`.
+Ordinary and model quads retain their existing fields. Fluid quads append a zero
+model-face sentinel at field 9 and `[x,y,z,h00,h01,h11,h10]` at field 10 (one-based
+Luau indexing). Heights derive from authoritative levels and surrounding blocks.
+The worker receives the complete one-voxel diagonal halo; block changes invalidate
+all affected corner-neighbor partitions. Clients that omit negotiation receive
+the previous quad representation. Voxel formats and epoch/revision rules are
+unchanged. Unknown mesh formats are rejected explicitly.
+
+Predicted placement lives in a separate bounded client overlay, never in canonical
+voxel snapshots. Only verified full-cube models with a known replaceable target
+and no local-player overlap receive collision/targeting prediction. Full textures
+render immediately when prepared. Pending overlays expire after six seconds,
+roll back on rejection/mismatched canonical state, and retire after the actual
+terrain revision renders. The server's bounded placement queue serializes
+Mineflayer confirmation and ignores its generic automatic look override, leaving
+the existing movement intention stream in control of look. The queue does not
+trust predicted outcomes or bypass reach/inventory checks.
+
 Minecraft Java TCP packets are handled by the pinned upstream adapter; this
 document describes the Roblox/gateway boundary and separate voxel experiment.
 One trusted Roblox server may use one gateway. All HTTP requests require

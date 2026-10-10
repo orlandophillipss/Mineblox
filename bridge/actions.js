@@ -1,5 +1,6 @@
 import { BridgeError } from './input.js';
 import { Vec3 } from 'vec3';
+import { CREATIVE_TABS, inCreativeTab } from './creative.js';
 import { createRequire } from 'node:module';
 // Resolve the same item codec Mineflayer's creative plugin already uses.
 const itemFactory = createRequire(import.meta.resolve('mineflayer'))(
@@ -22,12 +23,18 @@ const fields = {
   useItem: [],
   releaseItem: [],
   respawn: [],
-  catalog: ['query', 'offset'],
+  catalog: ['query', 'offset', 'tab'],
   creative: ['name', 'count', 'slot'],
 };
 export function validateAction(a) {
   if (!a || typeof a !== 'object' || Array.isArray(a) || !fields[a.kind])
     throw new BridgeError('Unknown action');
+  if (
+    a.kind === 'catalog' &&
+    a.tab !== undefined &&
+    !CREATIVE_TABS.includes(a.tab)
+  )
+    throw new BridgeError('Invalid creative tab');
   if (
     !Number.isSafeInteger(a.seq) ||
     a.seq < 1 ||
@@ -144,6 +151,7 @@ export class Actions {
     this.exclusive = false;
     this.dig = null;
     this.inventoryTail = Promise.resolve();
+    this.placementTail = Promise.resolve();
     const bot = player.bot;
     // Mineflayer's dig helper predicts air locally at its completion timer.
     // Suppress only that update; terrain changes follow received server packets.
@@ -182,10 +190,14 @@ export class Actions {
       'closeWindow',
       'creative',
     ].includes(action.kind);
-    const task = inventory
-      ? this.inventoryTail.then(() => this.inventoryTransaction(action))
-      : this.execute(action);
+    const task =
+      action.kind === 'place'
+        ? this.placementTail.then(() => this.execute(action))
+        : inventory
+          ? this.inventoryTail.then(() => this.inventoryTransaction(action))
+          : this.execute(action);
     if (inventory) this.inventoryTail = task.catch(() => {});
+    if (action.kind === 'place') this.placementTail = task.catch(() => {});
     void task
       .then(
         (value) => {
@@ -321,7 +333,13 @@ export class Actions {
       if (a.kind === 'catalog') {
         const query = a.query.toLowerCase().replaceAll(' ', '_');
         const matches = bot.registry.itemsArray.filter(
-          (item) => item.name !== 'air' && item.name.includes(query),
+          (item) =>
+            item.name !== 'air' &&
+            (item.name.includes(query) ||
+              item.displayName
+                ?.toLowerCase()
+                .includes(a.query.toLowerCase())) &&
+            inCreativeTab(item, a.tab ?? 'search', bot.registry),
         );
         const offset = a.offset ?? 0;
         return {
@@ -423,7 +441,15 @@ export class Actions {
       if (a.kind === 'place') {
         const block = this.block(a.target, a.hit);
         if (!bot.heldItem) throw new BridgeError('No held item', 409);
-        await bot.placeBlock(block, new Vec3(...a.face));
+        // The frontend already supplies held view intentions. Awaiting lookAt
+        // conflicts with those updates and delays jump-and-place by more ticks.
+        if (bot._placeBlockWithOptions)
+          await bot._placeBlockWithOptions(block, new Vec3(...a.face), {
+            forceLook: 'ignore',
+            delta: a.hit ? new Vec3(...a.hit) : undefined,
+            swingArm: 'right',
+          });
+        else await bot.placeBlock(block, new Vec3(...a.face));
         return {
           serverBlock: bot.blockAt(block.position.plus(new Vec3(...a.face)))
             ?.name,

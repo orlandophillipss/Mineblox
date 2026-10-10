@@ -1,7 +1,7 @@
 local World = {} World.__index = World
 local VoxelData=require(script and script.Parent.VoxelData or "./VoxelData")
-function World.new() return setmetatable({parts={},epoch=nil},World) end
-function World:clear() self.parts={} self.epoch=nil end
+function World.new() return setmetatable({parts={},predictions={},epoch=nil},World) end
+function World:clear() self.parts={} self.predictions={} self.epoch=nil end
 function World:apply(world)
 	assert((world.voxelFormat=="state-u32-xzy-v1" or world.voxelFormat=="state-adaptive-xzy-v2") and world.minecraftVersion=="1.21.4","Unsupported voxel schema or Minecraft version")
 	local decoded={} for _,p in ipairs(world.partitions) do decoded[p.key]=VoxelData.decode(p,world.voxelFormat) end
@@ -16,11 +16,21 @@ function World:apply(world)
 		end
 	end
 end
-function World:get(x,y,z)
+function World:canonical(x,y,z)
 	local ix,iy,iz=math.floor(x/8),math.floor(y/8),math.floor(z/8)
 	local p=self.parts[ix..","..iy..","..iz]
 	if not p or not p.voxels then return nil end
 	return p.palette[VoxelData.get(p.voxels,(x-ix*8)+8*((z-iz*8)+8*(y-iy*8)))]
+end
+-- Separate presentation overlay; never modifies canonical server voxels.
+function World:get(x,y,z)
+	local prediction=self.predictions and self.predictions[x..","..y..","..z]
+	return prediction and prediction.block or self:canonical(x,y,z)
+end
+function World:predict(at,block,owner) self.predictions[table.concat(at,",")]={block=block,owner=owner} end
+function World:unpredict(at,owner)
+	local key=table.concat(at,",") local p=self.predictions[key]
+	if p and p.owner==owner then self.predictions[key]=nil end
 end
 function World:boxes(low,high)
 	local boxes={}

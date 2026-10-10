@@ -63,7 +63,7 @@ function Images.request(key,scale)
 end
 function Images.item(name)
 	local model=Images.assets.itemModels and Images.assets.itemModels[name]
-	if Images.assets.itemModels then return model and model.kind=="sprite" and Images.request(model.texture) or nil end
+	if Images.assets.itemModels then return model and Images.request(model.guiTexture or (model.kind=="sprite" and model.texture or nil)) or nil end
 	return Images.request(Images.assets.items and Images.assets.items[name])
 end
 function Images.block(key) return Images.get(key,8) end

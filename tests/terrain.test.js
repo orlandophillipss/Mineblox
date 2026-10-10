@@ -142,7 +142,14 @@ test('the real terrain worker meshes water and lava levels and culls boundary ne
       ];
       const quads = await terrain.mesh({ origin: [-8, 64, 0], data, palette });
       assert.equal(quads.length, 6);
-      assert.ok(quads.every((q) => q[7] === 1 && q.every(Number.isFinite)));
+      assert.ok(
+        quads.every(
+          (q) =>
+            q[7] === 1 &&
+            q.slice(0, 9).every(Number.isFinite) &&
+            (!q[9] || (q[9].length === 7 && q[9].every(Number.isFinite))),
+        ),
+      );
       assert.equal(quads.find((q) => q[0] === 1 && q[1] === 1)[3], 71 + height);
       const culled = await terrain.mesh({
         origin: [-8, 64, 0],
@@ -283,6 +290,17 @@ test('terrain format negotiation preserves legacy clients and bounds adaptive sn
   const compact = await terrain.stream(player, {
     format: 'state-adaptive-xzy-v2',
   });
+  const fluid = await terrain.stream(player, {
+    meshFormat: 'quad-fluid-corners-v2',
+  });
+  assert.ok(
+    fluid.partitions.every((p) => p.meshFormat === 'quad-fluid-corners-v2'),
+  );
+  assert.ok(legacy.partitions.every((p) => !p.meshFormat));
+  await assert.rejects(
+    terrain.stream(player, { meshFormat: 'wrong' }),
+    /Unsupported/,
+  );
   assert.equal(compact.voxelFormat, 'state-adaptive-xzy-v2');
   assert.deepEqual(
     compact.partitions.map((p) => p.key),
@@ -297,6 +315,30 @@ test('terrain format negotiation preserves legacy clients and bounds adaptive sn
   await assert.rejects(
     terrain.stream(player, { format: 'bogus' }),
     /Unsupported/,
+  );
+});
+test('legacy fluid envelopes strip corner extensions while modern envelopes retain them', async (t) => {
+  const { terrain, player, bot } = setup(t);
+  bot.blockAt = (p) => ({
+    stateId: p.y === 63 ? 1 : 0,
+    name: p.y === 63 ? 'water' : 'air',
+    transparent: true,
+    shapes: [],
+    getProperties: () => ({ level: 0 }),
+  });
+  const modern = await terrain.stream(player, {
+    meshFormat: 'quad-fluid-corners-v2',
+  });
+  assert.ok(
+    modern.partitions.some((p) => p.quads.some((q) => Array.isArray(q[9]))),
+  );
+  const legacy = await terrain.stream(player);
+  assert.ok(
+    legacy.partitions.every((p) => p.quads.every((q) => q.length === 8)),
+  );
+  assert.deepEqual(
+    legacy.partitions.map((p) => p.quads.map((q) => q.slice(0, 8))),
+    modern.partitions.map((p) => p.quads.map((q) => q.slice(0, 8))),
   );
 });
 test('stream revisions recover lost snapshots, invalidate block edits and reset dimension epochs', async (t) => {

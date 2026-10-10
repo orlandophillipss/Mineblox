@@ -1,7 +1,7 @@
 import { parentPort } from 'node:worker_threads';
 import { VoxelRegion } from './voxels.js';
 import { greedyMesh } from './mesh.js';
-import { fluidHeight, fluidKind } from './fluid.js';
+import { fluidHeight, fluidKind, fluidCorners } from './fluid.js';
 
 parentPort.on('message', ({ id, origin, data, palette, neighbors = {} }) => {
   try {
@@ -80,6 +80,9 @@ parentPort.on('message', ({ id, origin, data, palette, neighbors = {} }) => {
                 ],
               ]
             : p.shapes;
+          const corners = ['water', 'lava'].includes(p.name)
+            ? fluidCorners(at, x, y, z, p.name)
+            : null;
           for (const shape of shapes)
             for (let axis = 0; axis < 3; axis++)
               for (const sign of [-1, 1]) {
@@ -106,6 +109,16 @@ parentPort.on('message', ({ id, origin, data, palette, neighbors = {} }) => {
                   width: shape[u + 3] - shape[u],
                   height: shape[v + 3] - shape[v],
                   key: String(p.state),
+                  ...(corners && !(axis === 1 && sign === -1)
+                    ? {
+                        fluid: [
+                          origin[0] + x,
+                          origin[1] + y,
+                          origin[2] + z,
+                          ...corners,
+                        ],
+                      }
+                    : {}),
                 });
               }
         }
@@ -119,7 +132,7 @@ parentPort.on('message', ({ id, origin, data, palette, neighbors = {} }) => {
         q.width,
         q.height,
         Number(q.key),
-        ...(q.faceIndex ? [q.faceIndex] : []),
+        ...(q.faceIndex ? [q.faceIndex] : q.fluid ? [0, q.fluid] : []),
       ]),
     });
   } catch (error) {

@@ -31,6 +31,28 @@ function Definitions.get(name)
 			add("Leg"..sign,{3,5,3},{sign*1.5,2.5,-.5},{26,0})
 			add("Wing"..sign,{1,4,6},{sign*3.5,9,0},{24,13}) parts[#parts].animation="wing" parts[#parts].phase=sign
 		end
+	elseif name=="cod" or name=="tropical_fish" or name=="tropical_fish_large" then
+		local function card(n,w,h,p,u,v,angles,animation)
+			add(n,{w,h,0},p,{u,v}) local part=parts[#parts] part.card=true part.uvRect={u,v,u+w,v+h} part.angles=angles part.animation=animation
+		end
+		-- Original mesh presentation, checked against the installed Java 1.21.4
+		-- model's texture offsets. Flat fins need explicit visible-face UVs.
+		if name=="cod" then
+			add("Body",{2,4,7},{0,2,3.5},{0,0}) add("Head",{2,4,3},{0,2,-1.5},{11,0}) add("Nose",{2,3,1},{0,2.5,-3.5},{0,0})
+			card("Tail",4,4,{0,2,9},22,7,{0,math.pi/2,0},"fish")
+			card("Dorsal",6,1,{0,4.5,2},20,0,{0,math.pi/2,0})
+			for _,sign in ipairs({-1,1}) do card("Fin"..sign,2,2,{sign*2,.6,0},24,sign==-1 and 1 or 4,{math.pi/2,0,sign*math.pi/4}) end
+		else
+			local large=name=="tropical_fish_large"
+			add("Body",{2,large and 6 or 3,6},{0,large and 7 or 4.5,0},{0,large and 20 or 0})
+			card("Tail",large and 5 or 6,large and 6 or 3,{0,large and 7 or 4.5,large and 5.5 or 6},large and 21 or 22,large and 21 or 0,{0,math.pi/2,0},"fish")
+			card("Dorsal",6,large and 4 or 3,{0,large and 12 or 7.5,0},large and 20 or 10,large and 17 or 1,{0,math.pi/2,0})
+			if large then card("Ventral",6,4,{0,2,0},20,27,{0,math.pi/2,0}) end
+			for _,sign in ipairs({-1,1}) do card("Fin"..sign,2,2,{sign*1.7,large and 6 or 4,0},2,sign==-1 and 16 or 12,{0,-sign*math.pi/4,0}) end
+		end
+	elseif name=="arrow" or name=="spectral_arrow" then
+		add("Shaft",{16,4,0},{-4,0,0},{0,0}) parts[#parts].card=true parts[#parts].uvRect={0,0,16,4} parts[#parts].angles={math.pi/4,0,0}
+		add("Feather",{16,4,0},{-4,0,0},{0,0}) parts[#parts].card=true parts[#parts].uvRect={0,0,16,4} parts[#parts].angles={math.pi*3/4,0,0}
 	elseif name=="bat" then
 		-- Java 1.21.4 uses the modern 32x32 skin with flat ears/wings.
 		add("Head",{4,3,2},{0,8.5,0},{0,7}) add("Body",{3,5,2},{0,4.5,0},{0,0})
@@ -47,6 +69,10 @@ function Definitions.get(name)
 			add("SpiderLeg"..row..sign,{16,2,2},{sign*(4+8*math.cos(angle)),6,8*math.sin(angle)},{18,0})
 			parts[#parts].angles={0,-sign*angle,sign*math.pi/7} parts[#parts].animation="spider" parts[#parts].phase=sign*(row%2==0 and 1 or -1)
 		end end
+	elseif name=="zombie_villager" then
+		add("Head",{8,10,8},{0,29,0},{0,0}) add("Nose",{2,4,2},{0,25,-5},{24,0})
+		add("Body",{8,12,6},{0,18,0},{16,20}) add("Tunic",{8,20,6},{0,14,0},{0,38}) parts[#parts].inflate=.05
+		for _,sign in ipairs({-1,1}) do add("Arm"..sign,{4,12,4},{sign*6,16,0},{44,22}) add("Leg"..sign,{4,12,4},{sign*2,6,0},{0,22}) end
 	elseif name=="player" or name=="zombie" or name=="skeleton" or name=="husk" or name=="stray" or name=="wither_skeleton" then
 		local thin=name=="skeleton" or name=="stray" or name=="wither_skeleton" local limb=thin and 2 or 4
 		add("Head",{8,8,8},{0,28,0},{0,0}) add("Body",{8,12,4},{0,18,0},{16,16})

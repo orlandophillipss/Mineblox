@@ -4,6 +4,7 @@ local ItemVisual=require(script.Parent.ItemVisual)
 local EntityVisual=require(script.Parent.EntityVisual)
 local Inventory=require(script.Parent.Inventory)
 local ViewportFit=require(script.Parent.ViewportFit)
+local CreativeLayout=require(script.Parent.CreativeLayout)
 local Interface={} Interface.__index=Interface
 local function mousePosition()
 	-- Absolute GUI coordinates and GetGuiObjectsAtPosition exclude the top bar.
@@ -15,6 +16,13 @@ local function frame(parent,size,pos,color)
 end
 local function button(parent,text,size,pos,callback)
 	local b=Instance.new("TextButton") b.Size=size b.Position=pos b.BackgroundColor3=Color3.fromRGB(110,110,110) b.Text=text b.TextSize=16 b.TextColor3=Color3.new(1,1,1) b.Parent=parent Font.attach(b) b.Activated:Connect(callback) return b
+end
+local function bevel(parent,inset)
+	for _,edge in ipairs({{0,0,1,0,0,2},{0,0,0,1,2,0},{0,1,1,0,0,2},{1,0,0,1,2,0}}) do
+		local e=Instance.new("Frame") e.BorderSizePixel=0 e.BackgroundColor3=inset and Color3.fromRGB(55,55,55) or Color3.new(1,1,1)
+		if edge[2]==1 or edge[1]==1 then e.BackgroundColor3=inset and Color3.new(1,1,1) or Color3.fromRGB(55,55,55) end
+		e.AnchorPoint=Vector2.new(edge[1],edge[2]) e.Position=UDim2.fromScale(edge[1],edge[2]) e.Size=UDim2.new(edge[3],edge[5],edge[4],edge[6]) e.ZIndex=6 e.Parent=parent
+	end
 end
 function Interface.new(gui,send)
 	local self=setmetatable({send=send,open=false,chatOpen=false,slots={},messages={},seen=0,actionSeen={},history={},historyIndex=0,snapshot=nil,displayNames=true},Interface)
@@ -33,15 +41,23 @@ function Interface.new(gui,send)
 	self.cursor=Instance.new("ImageLabel") self.cursor.BackgroundTransparency=1 self.cursor.Size=UDim2.fromOffset(40,40) self.cursor.ResampleMode=Enum.ResamplerMode.Pixelated self.cursor.Visible=false self.cursor.ZIndex=21 self.cursor.Parent=gui
 	self.cursorBlock=ItemVisual.icon(gui,UDim2.fromOffset(40,40),UDim2.fromOffset(0,0)) self.cursorBlock.viewport.ZIndex=21 self.cursorBlock.viewport.Visible=false
 	self.cursorCount=Font.label(gui,"",UDim2.fromOffset(40,18),UDim2.fromOffset(0,0)) self.cursorCount.ZIndex=22 self.cursorCount.TextXAlignment=Enum.TextXAlignment.Right
-	self.creative=frame(self.root,UDim2.new(1,-16,1,-46),UDim2.fromOffset(8,38)) self.creative.Visible=false self.creative.ZIndex=12
-	self.tabs=frame(self.root,UDim2.new(1,0,0,28),UDim2.fromOffset(0,-30)) self.tabs.Name="InventoryTabs" self.tabs.BackgroundTransparency=1 self.tabs.BorderSizePixel=0 self.tabs.Visible=false
-	for i,name in ipairs({"Search","Inventory"}) do button(self.tabs,name,UDim2.fromOffset(108,28),UDim2.fromOffset((i-1)*110,0),function()self.hovered=nil self.transactions:cancelDrag() self.creative.Visible=name=="Search" if self.creative.Visible then self:searchCatalog(0) end end) end
-	button(self.tabs,"<",UDim2.fromOffset(32,28),UDim2.fromOffset(300,0),function()self:searchCatalog(math.max(0,(self.catalogOffset or 0)-64))end)
-	button(self.tabs,">",UDim2.fromOffset(32,28),UDim2.fromOffset(334,0),function()if (self.catalogOffset or 0)+64<(self.catalogTotal or 0) then self:searchCatalog((self.catalogOffset or 0)+64) end end)
-	self.page=Font.label(self.tabs,"",UDim2.fromOffset(150,26),UDim2.fromOffset(370,0)) self.page.TextSize=14
-	self.search=Instance.new("TextBox") self.search.Size=UDim2.new(1,-16,0,32) self.search.Position=UDim2.fromOffset(8,6) self.search.PlaceholderText="Search Items" self.search.Text="" self.search.TextSize=14 self.search.ClearTextOnFocus=false self.search.Parent=self.creative
-	self.search.FocusLost:Connect(function() if self.creative.Visible then self:searchCatalog(0) end end)
-	self.browser=Instance.new("ScrollingFrame") self.browser.Size=UDim2.new(1,-16,1,-50) self.browser.Position=UDim2.fromOffset(8,42) self.browser.BackgroundTransparency=1 self.browser.ScrollBarThickness=6 self.browser.Parent=self.creative
+	self.creative=frame(self.root,UDim2.fromOffset(585,408),UDim2.fromOffset(0,0)) self.creative.Visible=false self.creative.ZIndex=1
+	self.tabs=frame(self.root,UDim2.fromScale(1,1),UDim2.fromOffset(0,0)) self.tabs.Name="InventoryTabs" self.tabs.BackgroundTransparency=1 self.tabs.BorderSizePixel=0 self.tabs.Visible=false
+	self.tabIcons={}
+	for i,tab in ipairs(CreativeLayout.tabs) do
+		local b=button(self.tabs,"",UDim2.fromOffset(72,54),UDim2.fromOffset(((i-1)%7)*81,i<=7 and -54 or 408),function()self:selectTab(tab[1],tab[2])end)
+		b.ZIndex=4 b.BackgroundColor3=Color3.fromRGB(198,198,198)
+		bevel(b,false)
+		local visual=ItemVisual.icon(b,UDim2.fromOffset(40,40),UDim2.fromOffset(16,7)) visual.viewport.ZIndex=5
+		local image=Instance.new("ImageLabel") image.Size=UDim2.fromOffset(36,36) image.Position=UDim2.fromOffset(18,9) image.BackgroundTransparency=1 image.ResampleMode=Enum.ResamplerMode.Pixelated image.ZIndex=5 image.Parent=b
+		table.insert(self.tabIcons,{button=b,block=visual,icon=image,item={name=tab[3]},tab=tab[1],fallback=tab[1]=="search" and "Search" or tab[1]=="inventory" and "Items" or nil})
+		b.MouseEnter:Connect(function()self.tooltip.Text=tab[2] self.tooltip.Visible=self.open end) b.MouseLeave:Connect(function()self.tooltip.Visible=false end)
+	end
+	self.creativeTitle=Font.label(self.creative,"Building Blocks",UDim2.fromOffset(530,28),UDim2.fromOffset(24,12)) self.creativeTitle.TextColor3=Color3.fromRGB(40,40,40) self.creativeTitle.TextXAlignment=Enum.TextXAlignment.Left self.creativeTitle:SetAttribute("BitmapShadow",false) self.creativeTitle.ZIndex=3
+	self.search=Instance.new("TextBox") self.search.Size=UDim2.fromOffset(345,28) self.search.Position=UDim2.fromOffset(210,12) self.search.PlaceholderText="Search Items" self.search.Text="" self.search.TextSize=16 self.search.ClearTextOnFocus=false self.search.ZIndex=3 self.search.Parent=self.creative
+	self.search:GetPropertyChangedSignal("Text"):Connect(function() self.searchAt=os.clock()+.25 end)
+	self.browser=Instance.new("ScrollingFrame") self.browser.Size=UDim2.fromOffset(534,270) self.browser.Position=UDim2.fromOffset(24,54) self.browser.BackgroundColor3=Color3.fromRGB(139,139,139) self.browser.BorderSizePixel=0 self.browser.ScrollBarThickness=18 self.browser.ZIndex=3 self.browser.Parent=self.creative
+	self.browser:GetPropertyChangedSignal("CanvasPosition"):Connect(function() self.catalogScrollAt=os.clock()+.12 end)
 	self.chat=frame(gui,UDim2.fromOffset(700,160),UDim2.new(0,8,1,-288),Color3.new()) self.chat.BackgroundTransparency=1 self.chat.BorderSizePixel=0
 	self.lines={} for i=1,8 do local l=Font.label(self.chat,"",UDim2.fromOffset(680,20),UDim2.fromOffset(0,(i-1)*20)) l.BackgroundColor3=Color3.new() l.BackgroundTransparency=.5 l.TextXAlignment=Enum.TextXAlignment.Left l.TextSize=16 self.lines[i]=l end
 	self.input=Instance.new("TextBox") self.input.Size=UDim2.fromOffset(700,28) self.input.Position=UDim2.new(0,8,1,-132) self.input.BackgroundColor3=Color3.new() self.input.BackgroundTransparency=.25 self.input.TextColor3=Color3.new(1,1,1) self.input.TextSize=16 self.input.Font=Enum.Font.Code self.input.TextXAlignment=Enum.TextXAlignment.Left self.input.ClearTextOnFocus=false self.input.Visible=false self.input.Parent=gui
@@ -65,7 +81,9 @@ function Interface.new(gui,send)
 		if input.UserInputType==Enum.UserInputType.MouseButton1 or input.UserInputType==Enum.UserInputType.MouseButton2 then
 			local slot=nil local mouse=mousePosition()
 			for _,object in ipairs(game.Players.LocalPlayer.PlayerGui:GetGuiObjectsAtPosition(mouse.X,mouse.Y)) do local n=tonumber(string.match(object.Name,"^InventorySlot(%d+)$")) if n then slot=n break end end
-			self.transactions:release(slot)
+			if self.creativePick and slot and slot>=36 and slot<=44 then
+				self.send("creative",{name=self.creativePick.name,count=self.creativePick.count,slot=slot}) self.creativePick=nil self.tooltip.Visible=false
+			else self.transactions:release(slot) end
 		end
 	end)
 	game.UserInputService.WindowFocusReleased:Connect(function()self.transactions:cancelDrag()end)
@@ -84,25 +102,39 @@ end
 function Interface:toggle()
 	self.open=not self.open self.root.Visible=self.open self.tooltip.Visible=false
 	if not self.open and self.snapshot and self.snapshot.inventory then self.transactions:close(self.snapshot.inventory.id) end
-	if not self.open then self.creative.Visible=false end
-	if self.open and self.snapshot and self.snapshot.gameMode=="creative" and self.snapshot.inventory.id==0 then self.creative.Visible=true self:searchCatalog(0) end
+	if not self.open then self.creative.Visible=false self.creativePick=nil end
+	if self.open and self.snapshot and self.snapshot.gameMode=="creative" and self.snapshot.inventory.id==0 then self:selectTab(self.creativeTab or "building") end
+end
+function Interface:selectTab(tab,title)
+	self.hovered=nil self.transactions:cancelDrag() self.tooltip.Visible=false self.creativePick=nil self.creativeTab=tab
+	self.creative.Visible=tab~="inventory" self.search.Visible=tab=="search"
+	for i,entry in ipairs(self.tabIcons) do if entry.tab==tab then title=title or CreativeLayout.tabs[i][2] end entry.button.BackgroundColor3=entry.tab==tab and Color3.fromRGB(235,235,235) or Color3.fromRGB(198,198,198) end
+	self.creativeTitle.Text=title or "Inventory"
+	self.browser.CanvasPosition=Vector2.zero self.catalogScrollAt=nil
+	if self.creative.Visible then self:searchCatalog(0) end
+	if self.snapshot then self:update(self.snapshot) end
 end
 function Interface:searchCatalog(offset)
-	self.catalogOffset=offset self.catalogRequest=self.send("catalog",{query=string.sub(self.search.Text,1,64),offset=offset})
+	self.catalogOffset=offset self.catalogRequest=self.send("catalog",{query=self.creativeTab=="search" and string.sub(self.search.Text,1,64) or "",offset=offset,tab=self.creativeTab or "building"})
 end
 function Interface:catalog(items)
 	self.browser:ClearAllChildren()
 	self.catalogSlots={}
 	for index,item in ipairs(items) do
-		local b=button(self.browser,"",UDim2.fromOffset(48,48),UDim2.fromOffset(((index-1)%9)*54,math.floor((index-1)/9)*54),function()
-			self.send("creative",{name=item.name,count=item.stackSize or 1,slot=36+(self.snapshot.selectedSlot or 0)})
+		local absolute=(self.catalogOffset or 0)+index-1
+		local b=button(self.browser,"",UDim2.fromOffset(54,54),UDim2.fromOffset((absolute%9)*54,math.floor(absolute/9)*54),function()end) b.Name="CreativeItem_"..item.name b.ZIndex=4 b.BackgroundColor3=Color3.fromRGB(139,139,139) b.BorderSizePixel=0 bevel(b,true)
+		b.MouseButton1Down:Connect(function()
+			self.tooltip.Visible=false
+			if game.UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then self.send("creative",{name=item.name,count=item.stackSize or 1,slot=36+(self.snapshot.selectedSlot or 0)})
+			else self.creativePick={name=item.name,count=1} end
 		end)
-		local block=ItemVisual.icon(b,UDim2.fromOffset(40,40),UDim2.fromOffset(4,4))
-		local icon=Instance.new("ImageLabel") icon.Size=UDim2.fromOffset(36,36) icon.Position=UDim2.fromOffset(6,6) icon.BackgroundTransparency=1 icon.ResampleMode=Enum.ResamplerMode.Pixelated icon.Parent=b icon.Visible=false
+		b.MouseButton2Down:Connect(function() self.creativePick={name=item.name,count=1} self.tooltip.Visible=false end)
+		local block=ItemVisual.icon(b,UDim2.fromOffset(40,40),UDim2.fromOffset(4,4)) block.viewport.ZIndex=5
+		local icon=Instance.new("ImageLabel") icon.Size=UDim2.fromOffset(36,36) icon.Position=UDim2.fromOffset(6,6) icon.BackgroundTransparency=1 icon.ResampleMode=Enum.ResamplerMode.Pixelated icon.Parent=b icon.Visible=false icon.ZIndex=5
 		table.insert(self.catalogSlots,{button=b,block=block,icon=icon,item=item})
 		b.MouseEnter:Connect(function()self.tooltip.Text=item.displayName or item.name self.tooltip.Visible=true end) b.MouseLeave:Connect(function()self.tooltip.Visible=false end)
 	end
-	self.browser.CanvasSize=UDim2.fromOffset(0,math.ceil(#items/9)*54)
+	self.browser.CanvasSize=UDim2.fromOffset(0,math.ceil((self.catalogTotal or #items)/9)*54)
 end
 function Interface:beginChat(command)
 	self.chatOpen=true self.input.Visible=true self.input.Text=command and "/" or "" self.input:CaptureFocus() self.input.CursorPosition=#self.input.Text+1
@@ -112,7 +144,8 @@ function Interface:message(text)
 end
 function Interface:update(state)
 	self.snapshot=state
-	if not self.previewModel or self.previewGeneration~=EntityVisual.generation then
+	local previewNeeded=self.open and state.inventory and state.inventory.id==0 and (state.gameMode~="creative" or self.creativeTab=="inventory")
+	if previewNeeded and (not self.previewModel or self.previewGeneration~=EntityVisual.generation) then
 		if self.previewModel then self.previewModel:Destroy() self.previewModel=nil end
 		local model=EntityVisual.create({type="player",name="player",id=0,height=1.8})
 		if model then
@@ -123,10 +156,11 @@ function Interface:update(state)
 		end
 	end
 	self.transactions:update(state)
-	for _,entry in ipairs(self.catalogSlots or {}) do
+	local visuals={} for _,e in ipairs(self.tabIcons) do table.insert(visuals,e) end for _,e in ipairs(self.catalogSlots or {}) do table.insert(visuals,e) end
+	for _,entry in ipairs(visuals) do
 		local rendered=ItemVisual.update(entry.block,entry.item.name) local image=Images.item(entry.item.name)
 		entry.icon.Visible=image~=nil and not rendered if image then entry.icon.ImageContent=Content.fromObject(image) end
-		entry.button.Text=not rendered and not image and (ItemVisual.definition(entry.item.name) and "..." or "?") or ""
+		entry.button.Text=not rendered and not image and (entry.fallback or (ItemVisual.definition(entry.item.name) and "..." or "?")) or ""
 	end
 	local dead=(state.health or 20)<=0
 	if dead and not self.death.Visible then self.deadAt=os.clock() self.respawning=false self.respawn.Text="Respawn" self.open=false self.root.Visible=false end
@@ -141,7 +175,7 @@ function Interface:update(state)
 		if self.actionSeen[result.seq]~=result.status then self.actionSeen[result.seq]=result.status
 			if result.status=="rejected" then self:message(result.error) if result.kind=="respawn" then self.respawning=false self.respawn.Text="Respawn" end end
 			if result.kind=="complete" and result.result then local names={} for _,s in ipairs(result.result.suggestions or {}) do table.insert(names,s.text) end self.suggestions.Text=table.concat(names,"  ") end
-			if result.kind=="catalog" and result.status=="sent" and result.result and result.seq==self.catalogRequest then self.catalogTotal=result.result.total or #result.result.items self.catalogOffset=result.result.offset or 0 self.page.Text=string.format("%d / %d",math.floor(self.catalogOffset/64)+1,math.max(1,math.ceil(self.catalogTotal/64))) self:catalog(result.result.items or {}) end
+			if result.kind=="catalog" and result.status=="sent" and result.result and result.seq==self.catalogRequest then self.catalogTotal=result.result.total or #result.result.items self.catalogOffset=result.result.offset or 0 self:catalog(result.result.items or {}) end
 		end
 	end
 	local inv=state.inventory if not inv then return end
@@ -162,7 +196,10 @@ function Interface:update(state)
 	self.craftingTitle.Position=crafting and UDim2.fromOffset(84,18) or UDim2.fromOffset(291,18)
 	self.root.BackgroundTransparency=self.background.Visible and 1 or 0
 	local rows=math.ceil((inv.inventoryStart or 0)/9)
-	local height=vanilla and 498 or 60+(rows+4)*54+12 local width=vanilla and 528 or 580
+	local creative=self.tabs.Visible and self.creative.Visible
+	self.background.Visible=self.background.Visible and not creative self.preview.Visible=self.preview.Visible and not creative self.craftingTitle.Visible=self.craftingTitle.Visible and not creative self.title.Visible=self.title.Visible and not creative
+	local height=creative and 408 or vanilla and 498 or 60+(rows+4)*54+12 local width=creative and 585 or vanilla and 528 or 580
+	for i,entry in ipairs(self.tabIcons) do entry.button.Position=UDim2.fromOffset(((i-1)%7)*81,i<=7 and -54 or height) end
 	self.root.Size=UDim2.fromOffset(width,height) self.root.Position=UDim2.fromScale(.5,.5)
 	for index,item in ipairs(inv.slots) do
 		local slot=index-1 local entry=self.slots[index]
@@ -186,8 +223,8 @@ function Interface:update(state)
 				else local offset=slot-start x=16+offset%9*58 y=60+(rows+math.floor(offset/9))*54+(offset>=27 and 10 or 0) end
 			end
 			local b=button(self.root,"",UDim2.fromOffset(48,48),UDim2.fromOffset(x,y),function()end)
-			b.MouseButton1Down:Connect(function()self.transactions:press(slot,0,game.UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) and 1 or 0)end)
-			b.MouseButton2Down:Connect(function()self.transactions:press(slot,1,0)end)
+			b.MouseButton1Down:Connect(function()if not self.creativePick then self.transactions:press(slot,0,game.UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) and 1 or 0) end end)
+			b.MouseButton2Down:Connect(function()if not self.creativePick then self.transactions:press(slot,1,0) end end)
 			b.Name="InventorySlot"..slot
 			b.BackgroundTransparency=self.background.Visible and 1 or 0 b.BorderSizePixel=self.background.Visible and 0 or 2
 			b.MouseEnter:Connect(function() self.hovered=slot self.transactions:visit(slot) self.tooltip.Visible=true end) b.MouseLeave:Connect(function()self.hovered=nil self.tooltip.Visible=false end)
@@ -195,24 +232,44 @@ function Interface:update(state)
 			local count=Font.label(b,"",UDim2.fromOffset(40,18),UDim2.fromOffset(6,30)) count.TextXAlignment=Enum.TextXAlignment.Right count.ZIndex=10
 			entry={button=b,icon=icon,count=count,blockIcon=ItemVisual.icon(b,UDim2.fromOffset(40,40),UDim2.fromOffset(4,4))} self.slots[index]=entry
 		end
+		entry.button.Visible=not creative or slot>=36 and slot<=44
+		if creative then local x,y=CreativeLayout.hotbar(slot) if x then entry.button.Position=UDim2.fromOffset(x,y) end
+		elseif vanilla then
+			-- Restore survival layout after leaving the creative browser.
+			if inv.id==0 and slot>=36 and slot<=44 then entry.button.Position=UDim2.fromOffset(24+(slot-36)*54,426) end
+		end
+		entry.button.ZIndex=creative and 4 or 1 entry.icon.ZIndex=creative and 5 or 2 entry.blockIcon.viewport.ZIndex=creative and 5 or 2
+		entry.button.BackgroundTransparency=creative and 0 or self.background.Visible and 1 or 0 entry.button.BorderSizePixel=creative and 2 or self.background.Visible and 0 or 2
 		local valid=type(item)=="table" local image=valid and Images.item(item.name)
 		local block=ItemVisual.update(entry.blockIcon,valid and item.name or nil)
 		entry.icon.Visible=image~=nil and not block if image then entry.icon.ImageContent=Content.fromObject(image) end
 		entry.button.Text=valid and not image and not block and string.sub(item.name,1,6) or "" entry.count.Text=valid and item.count>1 and tostring(item.count) or ""
 	end
-	local valid=type(inv.cursor)=="table"
-	local image=valid and Images.item(inv.cursor.name) local block=ItemVisual.update(self.cursorBlock,valid and inv.cursor.name or nil)
+	local carried=self.creativePick or inv.cursor local valid=type(carried)=="table"
+	local image=valid and Images.item(carried.name) local block=ItemVisual.update(self.cursorBlock,valid and carried.name or nil)
 	self.cursorBlock.viewport.Visible=self.open and block self.cursor.Visible=self.open and image~=nil and not block
 	if image then self.cursor.ImageContent=Content.fromObject(image) end
-	self.cursorCount.Text=self.open and valid and inv.cursor.count>1 and tostring(inv.cursor.count) or ""
+	self.cursorCount.Text=self.open and valid and carried.count>1 and tostring(carried.count) or ""
 end
 function Interface:tick()
-	local viewport=workspace.CurrentCamera.ViewportSize self.scale.Scale=math.min(1,viewport.X/(self.root.Size.X.Offset+32),viewport.Y/(self.root.Size.Y.Offset+72))
+	local viewport=workspace.CurrentCamera.ViewportSize self.scale.Scale=math.min(1,viewport.X/(self.root.Size.X.Offset+32),viewport.Y/(self.root.Size.Y.Offset+128))
+	if self.open and self.creative.Visible then
+		local now=os.clock()
+		if self.searchAt and now>=self.searchAt then self.searchAt=nil if self.creativeTab=="search" then self.browser.CanvasPosition=Vector2.zero self:searchCatalog(0) end end
+		if self.catalogScrollAt and now>=self.catalogScrollAt then self.catalogScrollAt=nil local offset=CreativeLayout.offset(self.browser.CanvasPosition.Y,self.catalogTotal or 0) if offset~=(self.catalogOffset or 0) then self:searchCatalog(offset) end end
+	end
 	local mouse=mousePosition() self.tooltip.Position=UDim2.fromOffset(mouse.X+14,mouse.Y-30) self.cursor.Position=UDim2.fromOffset(mouse.X-20,mouse.Y-20)
+	if self.creative.Visible and self.open and (self.creativePick or self.lastCreativePick) then
+		local carried=self.creativePick local image=carried and Images.item(carried.name) local block=ItemVisual.update(self.cursorBlock,carried and carried.name)
+		self.cursorBlock.viewport.Visible=block self.cursor.Visible=image~=nil and not block if image then self.cursor.ImageContent=Content.fromObject(image) end self.cursorCount.Text="" self.lastCreativePick=carried
+	end
 	self.cursorBlock.viewport.Position=self.cursor.Position self.cursorCount.Position=UDim2.fromOffset(mouse.X-20,mouse.Y+4)
+	-- A tooltip describes a slot, never the carried stack. Hide immediately
+	-- during pickup/drag; do not leave a stale item label above the pointer.
+	if self.creativePick or self.transactions.cursor or self.transactions.drag or self.transactions.active then self.tooltip.Visible=false end
 	if not self.open then self.cursor.Visible=false self.cursorBlock.viewport.Visible=false self.cursorCount.Text="" end
 	self.respawn.Active=not self.respawning and os.clock()-(self.deadAt or os.clock())>=1
-	if self.hovered and not self.creative.Visible and self.snapshot and self.snapshot.inventory then local item=self.snapshot.inventory.slots[self.hovered+1] self.tooltip.Text=type(item)=="table" and (item.displayName or item.name) or "" self.tooltip.Visible=self.open and type(item)=="table" end
+	if self.hovered and self.snapshot and self.snapshot.inventory then local item=self.snapshot.inventory.slots[self.hovered+1] self.tooltip.Text=type(item)=="table" and (item.displayName or item.name) or "" self.tooltip.Visible=self.open and type(item)=="table" and not self.creativePick and not self.transactions.cursor and not self.transactions.drag and not self.transactions.active end
 	local width=Font.width(self.tooltip.Text,16)+12 self.tooltip.Size=UDim2.fromOffset(width,24) self.tooltip.Position=UDim2.fromOffset(math.min(mouse.X+14,viewport.X-width-4),math.max(4,mouse.Y-30))
 	local active={}
 	for _,m in ipairs(self.messages) do if self.chatOpen or os.clock()-m.at<10 then table.insert(active,m) end end

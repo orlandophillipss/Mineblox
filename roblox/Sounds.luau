@@ -1,24 +1,33 @@
 local SoundService=game:GetService("SoundService")
+local BankRules=require(script.Parent.AudioBankRules)
 local Sounds={} Sounds.__index=Sounds
 -- Only configured, permitted recordings. Missing effects stay silent rather
 -- than using unrelated Roblox plastic/jump/slider noises for Minecraft events.
 function Sounds.new()
 	local module=script.Parent:FindFirstChild("AudioConfig") local config=module and require(module) or {sounds={},music={}}
 	local self=setmetatable({pool={},lastStep=0,stepDistance=0,lastHealth=20,eventSeq=0,actions={},enabled=true,musicEnabled=true,config=config},Sounds)
+	local bankConfig=script.Parent:FindFirstChild("AudioBankConfig") self.banks=require(script.Parent.AudioBankPlayer).new(bankConfig and require(bankConfig))
 	if #config.music>0 then
 		local music=Instance.new("Sound") music.Name="MinecraftMusic" music.Volume=.3 music.Parent=SoundService self.music=music self.musicIndex=0
 		local function nextTrack() if not self.musicEnabled then return end self.musicIndex=self.musicIndex%#config.music+1 music.SoundId=config.music[self.musicIndex] music:Play() end music.Ended:Connect(function() task.delay(30,nextTrack) end) self.nextTrack=nextTrack nextTrack()
 	end return self
 end
 function Sounds:setEnabled(enabled)
-	self.enabled=enabled if not enabled then for _,sound in pairs(self.pool) do sound:Stop() end end
+	self.enabled=enabled self.banks.enabled=enabled if not enabled then self.banks:stop() for _,sound in pairs(self.pool) do sound:Stop() end end
 end
 function Sounds:setMusic(enabled)
-	self.musicEnabled=enabled if not self.music then return false end
+	self.musicEnabled=enabled self.banks.muted.music=not enabled
+	if not enabled then for _,entry in ipairs(self.banks.pool) do if entry.category=="music" then entry.player:Stop() entry.busy=false end end end
+	if not self.music then for _,event in pairs(self.banks.config and self.banks.config.events or {}) do if event.category=="music" then return true end end return false end
 	if enabled then if self.music.TimePosition>0 then self.music:Resume() else self.nextTrack() end else self.music:Pause() end return true
 end
+function Sounds:setVolume(category,value)
+	if not self.banks:setVolume(category,value) then return false end
+	if category=="music" and self.music then self.music.Volume=.3*value end
+	return true
+end
 function Sounds:play(kind,pitch,volume,position)
-	if not self.enabled then return end local id=self.config.sounds[kind] if not id then return end
+	if not self.enabled then return end if self.banks:play(BankRules.aliases[kind] or kind,pitch,volume,position) then return end local id=self.config.sounds[kind] if not id then return end
 	local s=self.pool[kind]
 	if not s then
 		s=Instance.new("Sound") s.Name="MinecraftSound_"..kind s.SoundId=id s.Parent=SoundService self.pool[kind]=s
@@ -33,7 +42,8 @@ function Sounds:play(kind,pitch,volume,position)
 		end
 		emitter.Value.Position=Vector3.new(position.x,position.y,position.z)*4 s.Parent=emitter.Value
 	else s.Parent=SoundService end
-	s.Volume=math.clamp(volume or .25,0,1) s.PlaybackSpeed=math.clamp(pitch or 1,.25,4) s:Play()
+	local category=(string.find(kind,"step") or kind=="place" or kind=="breakBlock") and "blocks" or kind=="damage" and "players" or "friendly"
+	s.Volume=math.clamp(volume or .25,0,1)*(self.banks.volumes[category] or 1) s.PlaybackSpeed=math.clamp(pitch or 1,.25,4) s:Play()
 end
 function Sounds:update(state)
 	if self.sessionId~=state.id or self.epoch~=state.worldEpoch then
@@ -41,7 +51,7 @@ function Sounds:update(state)
 	end
 	if state.health and state.health<self.lastHealth then self:play("damage",1,.35) end self.lastHealth=state.health or self.lastHealth
 	for _,e in ipairs(state.events or {}) do if e.seq>self.eventSeq then self.eventSeq=e.seq
-		if e.kind=="sound" and self.config.sounds[e.data.name] then self:play(e.data.name,e.data.pitch,(e.data.volume or 1)*.3,e.data.position) end
+		if e.kind=="sound" then self:play(e.data.name,e.data.pitch,(e.data.volume or 1)*.3,e.data.position) end
 		if e.kind=="pickup" and e.data.collector==state.entityId then self:play("pickup",1,.2) end
 	end end
 	for _,a in ipairs(state.actions or {}) do if a.status=="sent" and not self.actions[a.seq] then

@@ -1,5 +1,9 @@
 # Audio in the local client
 
+For optional event-bank compilation, binding and the bounded native player, see
+[the audio-bank guide](phase4-audio-banks.md). Default effects below remain active
+without banks or external compiler tools.
+
 The default effect mappings use Creator Store assets that loaded in the tested
 Studio account: [button click](https://create.roblox.com/store/asset/8919449656),
 [classic hurt](https://create.roblox.com/store/asset/535690488),

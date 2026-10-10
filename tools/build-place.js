@@ -5,6 +5,7 @@ import { access } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import { publicUrl } from './tunnel.js';
 import { validateContent, EMPTY_CONTENT } from '../bridge/content.js';
+import { writeAudioBankConfig } from './audio-bank-config.js';
 
 export async function buildPlace({
   url,
@@ -19,6 +20,7 @@ export async function buildPlace({
   const generation = randomUUID();
   const root = path.resolve(published ? '.local/published' : '.local/roblox');
   await mkdir(root, { recursive: true });
+  await writeAudioBankConfig(root);
   let audio = JSON.parse(await readFile('roblox/audio-defaults.json', 'utf8'));
   try {
     audio = JSON.parse(await readFile('.local/audio.json', 'utf8'));
@@ -109,16 +111,24 @@ export async function buildPlace({
           Renderer: source('Renderer.luau'),
           Images: source('Images.luau'),
           ItemVisual: source('ItemVisual.luau'),
+          MeshBuilder: source('MeshBuilder.luau'),
+          HeldItemPose: source('HeldItemPose.luau'),
           EntityVisual: source('EntityVisual.luau'),
           EntityDefinitions: source('EntityDefinitions.luau'),
           EntityLoad: source('EntityLoad.luau'),
           ViewportFit: source('ViewportFit.luau'),
+          CreativeLayout: source('CreativeLayout.luau'),
           AudioConfig: { $path: path.join(root, 'AudioConfig.luau') },
+          AudioBankConfig: { $path: path.join(root, 'AudioBankConfig.luau') },
+          AudioBankData: { $path: path.join(root, 'AudioBankData') },
+          AudioBankPlayer: source('AudioBankPlayer.luau'),
+          AudioBankRules: source('AudioBankRules.luau'),
           Font: source('Font.luau'),
           World: source('World.luau'),
           VoxelData: source('VoxelData.luau'),
           Prediction: source('Prediction.luau'),
           Placement: source('Placement.luau'),
+          PlacementRules: source('PlacementRules.luau'),
           Inventory: source('Inventory.luau'),
           Atlas: source('Atlas.luau'),
           FaceTiles: source('FaceTiles.luau'),

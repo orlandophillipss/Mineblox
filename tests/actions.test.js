@@ -99,6 +99,42 @@ function setup(t) {
   t.after(() => player.close());
   return { player, bot, calls, actions: player.actions };
 }
+test('placement helpers serialize confirmation and preserve the movement look direction', async (t) => {
+  const { actions, bot } = setup(t);
+  const started = [],
+    releases = [];
+  bot._placeBlockWithOptions = async (block, face, options) => {
+    started.push({ block, face, options });
+    await new Promise((resolve) => releases.push(resolve));
+  };
+  const first = actions.submit(
+    action('place', {
+      target: [0, 64, 0],
+      face: [0, 1, 0],
+      hit: [0.5, 1, 0.5],
+    }),
+  );
+  const second = actions.submit({
+    ...action('place', {
+      target: [0, 65, 0],
+      face: [0, 1, 0],
+      hit: [0.5, 1, 0.5],
+    }),
+    seq: 2,
+  });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(started.length, 1);
+  assert.equal(started[0].options.forceLook, 'ignore');
+  assert.deepEqual(started[0].options.delta, new Vec3(0.5, 1, 0.5));
+  releases[0]();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(first.status, 'sent');
+  assert.equal(started.length, 2);
+  releases[1]();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(second.status, 'sent');
+  assert.equal(actions.pending, 0);
+});
 test('discrete action parser rejects gameplay claims, invalid faces, windows and chat controls', () => {
   for (const a of [
     action('place', { target: [0, 64, 0], face: [1, 1, 0] }),

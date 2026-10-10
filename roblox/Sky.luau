@@ -31,7 +31,7 @@ function Sky.new()
 		if self.moon then self.moon:WritePixelsBuffer(Vector2.zero,size,moon:ReadPixelsBuffer(Vector2.zero,size)) sky.MoonTextureContent=Content.fromObject(self.moon) self.moonPart,self.moonLabel=panel(folder,"Moon",Vector3.new(6,6,.01)) self.moonLabel.ImageContent=Content.fromObject(self.moon) end
 	else sky.MoonTextureId="" end
 	sky.Parent=Lighting
-	local cloudImage=Images.gui("clouds")
+	local cloudImage=Images.get(Images.assets.gui.clouds,4)
 	if cloudImage then
 		local ok,err=pcall(function()
 			local mesh=AssetService:CreateEditableMesh() assert(mesh,"Cloud mesh unavailable")
@@ -39,9 +39,9 @@ function Sky.new()
 			for i,p in ipairs({{-1024,-1024},{1024,-1024},{1024,1024},{-1024,1024}}) do ids[i]=mesh:AddVertex(Vector3.new(p[1],0,p[2])) uvs[i]=mesh:AddUV(Vector2.new(p[1]/12288,p[2]/12288)) end
 			for _,t in ipairs({{1,2,3},{1,3,4}}) do local f=mesh:AddTriangle(ids[t[1]],ids[t[2]],ids[t[3]]) mesh:SetFaceUVs(f,{uvs[t[1]],uvs[t[2]],uvs[t[3]]}) end
 			self.cloudMesh=AssetService:CreateEditableMeshAsync(Content.fromObject(mesh),{FixedSize=true}) mesh:Destroy() assert(self.cloudMesh,"Cloud fixed mesh unavailable")
-			local part=AssetService:CreateMeshPartAsync(Content.fromObject(self.cloudMesh)) part.Name="MinecraftCloudLayer" part.Anchored=true part.CanCollide=false part.CanTouch=false part.CanQuery=false part.CastShadow=false part.DoubleSided=true part.Transparency=.15
+			local part=AssetService:CreateMeshPartAsync(Content.fromObject(self.cloudMesh)) part.Name="MinecraftCloudLayer" part.Anchored=true part.CanCollide=false part.CanTouch=false part.CanQuery=false part.CastShadow=false part.DoubleSided=true part.Transparency=0
 			local appearance=AssetService:CreateSurfaceAppearanceAsync({ColorMap=Content.fromObject(cloudImage)}) appearance.AlphaMode=Enum.AlphaMode.Transparency appearance.ResampleMode=Enum.ResamplerMode.Pixelated appearance.Parent=part
-			part.Parent=workspace self.cloud=part self.cloudBaseSize=part.Size self.cloudUVs={}
+			part.Parent=workspace self.cloud=part self.cloudAppearance=appearance self.cloudBaseSize=part.Size self.cloudUVs={}
 			for _,id in ipairs(self.cloudMesh:GetUVs()) do self.cloudUVs[id]=self.cloudMesh:GetUV(id) end
 		end)
 		if not ok then warn("Cloud rendering:",err) end
@@ -50,17 +50,19 @@ function Sky.new()
 end
 function Sky:state(state)
 	if state.timeOfDay then self.time=state.timeOfDay self.at=os.clock() end
-	self.day=state.day or 0 self.dimension=state.dimension self.inWater=state.inWater
+	self.day=state.day or 0 self.dimension=state.dimension self.inWater=state.inWater self.exposed=state.skyVisible==true self.skyLight=state.skyLight
 end
 function Sky:tick(camera,world)
 	local center=camera.CFrame.Position
 	local point=center/4
 	local medium=world and world:submerged({x=point.X,y=point.Y,z=point.Z})
 	local underwater=medium=="water" or medium==nil and self.inWater
+	local roof=world and world:ray({x=point.X,y=point.Y,z=point.Z},{x=0,y=1,z=0},16)
+	local showSky=self.exposed and not underwater and not roof and (self.dimension=="overworld" or self.dimension=="minecraft:overworld")
 	local time=(self.time+(os.clock()-self.at)*20)%24000 local angle=time/24000*math.pi*2
 	local sunDirection=Vector3.new(-math.cos(angle),math.sin(angle),0)
-	if self.sun then self.sun.CFrame=CFrame.lookAt(center+sunDirection*48,center) self.sunLabel.Visible=not underwater and sunDirection.Y>0 end
-	if self.moonPart then self.moonPart.CFrame=CFrame.lookAt(center-sunDirection*48,center) self.moonLabel.Visible=not underwater and sunDirection.Y<0 end
+	if self.sun then self.sun.CFrame=CFrame.lookAt(center+sunDirection*48,center) self.sunLabel.Visible=showSky and sunDirection.Y>0 end
+	if self.moonPart then self.moonPart.CFrame=CFrame.lookAt(center-sunDirection*48,center) self.moonLabel.Visible=showSky and sunDirection.Y<0 end
 	if os.clock()-self.updated<.1 then return end self.updated=os.clock()
 	local daylight=math.clamp(math.sin(angle)*1.3+.2,0,1)
 	-- Direct Roblox solar lighting introduces broad specular highlights even
@@ -70,14 +72,16 @@ function Sky:tick(camera,world)
 	-- black. Keep nighttime terrain readable while the sky/fog remain dark.
 	-- This is approximate illumination, not Minecraft block/sky light data.
 	Lighting.Ambient=Color3.fromRGB(180,185,200):Lerp(Color3.new(1,1,1),daylight) Lighting.OutdoorAmbient=Lighting.Ambient
-	Lighting.FogColor=underwater and Color3.fromRGB(25,55,115) or Color3.fromRGB(20,24,38):Lerp(Color3.fromRGB(156,190,239),daylight)
-	Lighting.FogStart=underwater and 4 or 96 Lighting.FogEnd=underwater and 40 or 192
-	local night=daylight<.2
+	local cave=not self.exposed and (self.skyLight==nil or self.skyLight==0)
+	Lighting.FogColor=underwater and Color3.fromRGB(25,55,115) or cave and Color3.fromRGB(12,14,18) or Color3.fromRGB(20,24,38):Lerp(Color3.fromRGB(156,190,239),daylight)
+	Lighting.FogStart=underwater and 4 or 128 Lighting.FogEnd=underwater and 40 or 256
+	local night=daylight<.2 or cave or underwater
 	if night~=self.night then self.night=night cubemap(self.sky,night and SkyAssets.night or SkyAssets.day) end
-	self.sky.StarCount=not underwater and night and 1200 or 0
+	self.sky.StarCount=showSky and night and 1200 or 0
 	if self.moon and self.phase~=(self.day%8) then self.phase=self.day%8 local origin=Vector2.new((self.phase%4)*self.moonSize.X,math.floor(self.phase/4)*self.moonSize.Y) self.moon:WritePixelsBuffer(Vector2.zero,self.moonSize,self.moonSource:ReadPixelsBuffer(origin,self.moonSize)) end
 	if self.cloud then
-		self.cloud.Transparency=not underwater and (self.dimension=="overworld" or self.dimension=="minecraft:overworld") and .15 or 1
+		self.cloud.Transparency=showSky and 0 or 1
+		self.cloudAppearance.Color=Color3.fromRGB(70,75,95):Lerp(Color3.new(1,1,1),daylight)
 		local center=Vector3.new(math.floor(camera.CFrame.Position.X/512)*512,192*4,math.floor(camera.CFrame.Position.Z/512)*512)
 		-- Project only the decorative sky plane closer, preserving its angular
 		-- size and world UV position. Terrain/gameplay coordinates stay untouched.

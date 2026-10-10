@@ -2,6 +2,7 @@ import { EventEmitter } from 'node:events';
 import { performance } from 'node:perf_hooks';
 import { randomUUID } from 'node:crypto';
 import { Actions } from './actions.js';
+import { skyExposure, eyeSkyLight, fishVariant } from './presentation.js';
 import {
   BridgeError,
   CONTROLS,
@@ -281,6 +282,8 @@ export class VirtualPlayer extends EventEmitter {
       hunger: this.bot.food ?? null,
       timeOfDay: this.bot.time?.timeOfDay ?? null,
       day: this.bot.time?.day ?? 0,
+      skyVisible: skyExposure(this.bot),
+      skyLight: eyeSkyLight(this.bot),
       selectedSlot: this.bot.quickBarSlot ?? 0,
       worldEpoch: this.worldEpoch,
       velocity: this.bot.entity?.velocity
@@ -316,6 +319,10 @@ export class VirtualPlayer extends EventEmitter {
           width: e.width ?? 0.6,
           height: e.height ?? 1.8,
           flags: e.metadata?.[0] ?? 0,
+          variant: fishVariant(e, this.bot.registry),
+          heldItem: e.heldItem
+            ? { name: e.heldItem.name, count: e.heldItem.count }
+            : null,
           item: (() => {
             try {
               const item = e.getDroppedItem?.();

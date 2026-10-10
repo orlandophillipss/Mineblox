@@ -1,6 +1,6 @@
 {
   "name": "mineblox",
-  "version": "0.2.0-beta.7",
+  "version": "0.2.0-beta.8",
   "private": true,
   "description": "Minecraft-authoritative protocol bridge for Roblox frontends",
   "type": "module",
@@ -9,6 +9,10 @@
     "node": ">=24"
   },
   "scripts": {
+    "audio:compile": "node tools/audio-bank.js",
+    "audio:bind": "node tools/audio-bank-bind.js",
+    "audio:import": "node tools/import-audio.js",
+    "bench:audio": "node tools/audio-bank-bench.js",
     "manager": "node tools/manager.js",
     "release:zip": "node tools/release.js",
     "dev": "node --env-file-if-exists=.env bridge/main.js",

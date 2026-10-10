@@ -4,13 +4,13 @@ local Images=require(script.Parent.Images)
 local Definitions=require(script.Parent.EntityDefinitions)
 local Loader=require(script.Parent.EntityLoad).new()
 local EntityVisual={cache={},meshes={},generation=0}
-local function box(mesh,size,uv,width,height)
+local function box(mesh,size,uv,width,height,rect)
 	local w,h,d=size[1],size[2],size[3] local u,v=uv[1],uv[2]
 	local rectangles={{u,v+d,u+d,v+d+h},{u+d+w,v+d,u+d+w+d,v+d+h},{u+d+w,v,u+d+w+w,v+d},{u+d,v,u+d+w,v+d},{u+d,v+d,u+d+w,v+d+h},{u+d+w+d,v+d,u+d+w+d+w,v+d+h}}
 	for axis=0,2 do for _,sign in ipairs({-1,1}) do
 		if d==0 and (axis~=2 or sign~= -1) then continue end
 		local a=axis+1 local b,c=a%3+1,(a+1)%3+1 local ids,uvs={},{}
-		local r=rectangles[axis*2+(sign==-1 and 1 or 2)]
+		local r=rect or rectangles[axis*2+(sign==-1 and 1 or 2)]
 		for i,corner in ipairs({{0,0},{1,0},{1,1},{0,1}}) do
 			local p={-w/2,-h/2,-d/2} p[a]=sign*size[a]/2 p[b]=(corner[1]-.5)*size[b] p[c]=(corner[2]-.5)*size[c]
 			ids[i]=mesh:AddVertex(Vector3.new(p[1],p[2],p[3])/4)
@@ -35,9 +35,9 @@ local function prepare(ticket,key)
 			local image=Images.get(textureKey,scale) assert(image,"Entity texture allocation denied")
 			local width,height=data.width or image.Size.X,data.height or image.Size.Y
 			local w,h,d=table.unpack(part.size) local u,v=table.unpack(part.uv)
-			assert(u+2*w+2*d<=width and v+d+h<=height,"Entity UV outside skin: "..name.."/"..part.name)
+			assert(part.uvRect and part.uvRect[3]<=width and part.uvRect[4]<=height or not part.uvRect and u+2*w+2*d<=width and v+d+h<=height,"Entity UV outside skin: "..name.."/"..part.name)
 			local mesh=AssetService:CreateEditableMesh() assert(mesh,"Entity mesh allocation denied") table.insert(owned,mesh)
-			box(mesh,part.size,part.uv,width,height)
+			box(mesh,part.size,part.uv,width,height,part.uvRect)
 			if part.inflate then for _,id in ipairs(mesh:GetVertices()) do local p=mesh:GetPosition(id) mesh:SetPosition(id,Vector3.new(p.X+math.sign(p.X)*part.inflate/4,p.Y+math.sign(p.Y)*part.inflate/4,p.Z+math.sign(p.Z)*part.inflate/4)) end end
 			local fixed=AssetService:CreateEditableMeshAsync(Content.fromObject(mesh),{FixedSize=true}) assert(fixed,"Entity fixed mesh allocation denied") mesh:Destroy() owned[#owned]=fixed
 			local p=AssetService:CreateMeshPartAsync(Content.fromObject(fixed)) p.Name=part.name p.Anchored=true p.CanCollide=false p.CanTouch=false p.CastShadow=false p.Color=Color3.new(1,1,1) p.Material=Enum.Material.SmoothPlastic p.DoubleSided=part.card==true p.Parent=model
@@ -59,11 +59,12 @@ function EntityVisual.reset()
 end
 function EntityVisual.create(entity)
 	local name=entity.type=="player" and "player" or entity.name
+	if name=="tropical_fish" and bit32.band(entity.variant or 0,255)==1 then name="tropical_fish_large" end
 	local key=Images.assets.entities and Images.assets.entities[name] if not key or not Definitions.get(name) then return nil end
 	local template=EntityVisual.cache[name]
 	if not template then local ticket=Loader:start(name,os.clock()) if ticket then task.spawn(prepare,ticket,key) end return nil end
 	local copy=template:Clone() copy.Name=entity.name copy:SetAttribute("MinecraftEntityId",entity.id)
-	local _,size=copy:GetBoundingBox() if size.Y>0 then copy:ScaleTo((entity.height or 1.8)*4/size.Y) end
+	local _,size=copy:GetBoundingBox() if name=="arrow" or name=="spectral_arrow" then copy:ScaleTo(.9) elseif size.Y>0 then copy:ScaleTo((entity.height or 1.8)*4/size.Y) end
 	return copy
 end
 function EntityVisual.animate(entry,sample,dt)
@@ -82,7 +83,9 @@ function EntityVisual.animate(entry,sample,dt)
 	for _,limb in ipairs(entry.rig) do
 		local name=limb.part.Name local rest=limb.rest local rotation=CFrame.new()
 		if name=="Head" then rotation=CFrame.Angles(-(entry.pitch or 0),0,0) end
-		if limb.part:GetAttribute("Animation")=="bat" then
+		if limb.part:GetAttribute("Animation")=="fish" then
+			rotation=CFrame.Angles(0,math.sin(os.clock()*12)*.35,0)
+		elseif limb.part:GetAttribute("Animation")=="bat" then
 			rotation=CFrame.Angles(0,math.sin(os.clock()*18)*.5*(limb.part:GetAttribute("Phase") or 1),0)
 		elseif limb.part:GetAttribute("Animation")=="spider" then
 			rotation=CFrame.Angles(0,math.sin(entry.gait)*entry.amplitude*.3*(limb.part:GetAttribute("Phase") or 1),0)
@@ -95,7 +98,8 @@ function EntityVisual.animate(entry,sample,dt)
 			if string.find(name,"Arm") then angle=-angle+math.sin(os.clock()*1.5)*.025 end
 			rotation=CFrame.new(0,limb.height/2,0)*CFrame.Angles(angle,0,0)*CFrame.new(0,-limb.height/2,0)
 		end
-		limb.part.CFrame=pivot*rest*rotation limb.part.Color=os.clock()<(entry.hurtUntil or 0) and Color3.new(1,.45,.45) or limb.color
+		limb.part.CFrame=pivot*rest*rotation local color=os.clock()<(entry.hurtUntil or 0) and Color3.new(1,.45,.45) or limb.color
+		limb.part.Color=color local appearance=limb.part:FindFirstChildOfClass("SurfaceAppearance") if appearance then appearance.Color=color end
 	end
 end
 return EntityVisual

@@ -1,6 +1,7 @@
 import { readFile, writeFile, stat } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import path from 'node:path';
+import { validateBankManifest } from './audio-bank-config.js';
 
 const types = {
   '.ogg': 'audio/ogg',
@@ -29,11 +30,14 @@ export function validateAudioManifest(manifest) {
       !types[path.extname(asset.file).toLowerCase()] ||
       typeof asset.name !== 'string' ||
       !/^[a-zA-Z0-9_. -]{1,50}$/.test(asset.name) ||
-      !['sound', 'music'].includes(asset.kind) ||
+      !['sound', 'music', 'bank'].includes(asset.kind) ||
+      (asset.kind === 'bank' &&
+        (!/^[1-9]\d{0,5}$/.test(asset.key) ||
+          typeof manifest.bankManifest !== 'string')) ||
       (asset.kind === 'sound' && !/^[a-zA-Z0-9_.]{1,100}$/.test(asset.key))
     )
       throw new Error('Invalid audio file, name, kind or sound key');
-    const key = asset.kind === 'sound' ? asset.key : asset.name;
+    const key = asset.kind !== 'music' ? asset.key : asset.name;
     if (keys.has(key)) throw new Error('Duplicate audio mapping');
     keys.add(key);
   }
@@ -91,7 +95,7 @@ async function main() {
   for (const asset of manifest.assets) {
     const filename = path.resolve(path.dirname(file), asset.file);
     const info = await stat(filename);
-    if (!info.isFile() || info.size < 1 || info.size >= 20 * 1024 * 1024)
+    if (!info.isFile() || info.size < 1 || info.size >= 20_000_000)
       throw new Error('Audio must be a nonempty file smaller than 20 MiB');
     const bytes = await readFile(filename);
     assets.push({
@@ -103,6 +107,20 @@ async function main() {
   console.log(
     `Validated ${assets.length} audio files for ${manifest.creatorType} ${manifest.creatorId}`,
   );
+  const bankFile =
+    manifest.bankManifest &&
+    path.resolve(path.dirname(file), manifest.bankManifest);
+  const banks =
+    bankFile &&
+    validateBankManifest(JSON.parse(await readFile(bankFile, 'utf8')));
+  for (const asset of assets)
+    if (
+      asset.kind === 'bank' &&
+      (!banks?.banks[asset.key] || banks.banks[asset.key].sha256 !== asset.hash)
+    )
+      throw new Error(
+        'Bank file hash or mapping does not match compiled manifest',
+      );
   if (!process.argv.includes('--upload')) {
     console.log('Preview only. Add --upload to import these authorized files.');
     return;
@@ -201,6 +219,9 @@ async function main() {
     const id = 'rbxassetid://' + record.assetId;
     if (asset.kind === 'music') {
       if (!config.music.includes(id)) config.music.push(id);
+    } else if (asset.kind === 'bank') {
+      banks.banks[asset.key].assetId = id;
+      await writeFile(bankFile, JSON.stringify(banks, null, 2));
     } else config.sounds[asset.key] = id;
     if (config.music.length > 32 || Object.keys(config.sounds).length > 32)
       throw new Error(

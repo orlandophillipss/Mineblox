@@ -101,6 +101,8 @@ export function surfaceHeights(world, position, radius) {
 // One bounded worker queue prevents mesh work from blocking gameplay exchanges.
 export class TerrainService {
   constructor({ models = {}, radius = 2 } = {}) {
+    if (!Number.isInteger(radius) || radius < 2 || radius > 4)
+      throw new Error('Invalid terrain radius');
     this.models = models;
     this.radius = radius;
     this.maxPartitions = 6 * (radius * 2 + 1) ** 2;
@@ -148,16 +150,12 @@ export class TerrainService {
       const invalidate = (oldBlock, block) => {
         const p = block?.position ?? oldBlock?.position;
         if (!p) return;
-        for (const [dx, dy, dz] of [
-          [0, 0, 0],
-          [1, 0, 0],
-          [-1, 0, 0],
-          [0, 1, 0],
-          [0, -1, 0],
-          [0, 0, 1],
-          [0, 0, -1],
-        ]) {
-          const key = partitionKey({ x: p.x + dx, y: p.y + dy, z: p.z + dz });
+        const keys = new Set();
+        for (const dx of [-1, 0, 1])
+          for (const dy of [-1, 0, 1])
+            for (const dz of [-1, 0, 1])
+              keys.add(partitionKey({ x: p.x + dx, y: p.y + dy, z: p.z + dz }));
+        for (const key of keys) {
           state.cache.delete(key);
           state.dirty.set(key, (state.dirty.get(key) ?? 0) + 1);
         }
@@ -256,15 +254,16 @@ export class TerrainService {
                     : [155, 155, 155]),
             });
           }
-      // A one-face-thick halo removes duplicate internal partition faces.
+      // A complete one-voxel halo includes diagonals for shared fluid corners.
       for (let axis = 0; axis < 3; axis++)
         for (const side of [-1, 8])
-          for (let a = 0; a < 8; a++)
-            for (let b = 0; b < 8; b++) {
+          for (let a = -1; a <= 8; a++)
+            for (let b = -1; b <= 8; b++) {
               const at = [...origin];
               at[axis] += side;
               at[(axis + 1) % 3] += a;
               at[(axis + 2) % 3] += b;
+              if (neighbors[at.join(',')] !== undefined) continue;
               const block = player.bot.blockAt(p.set(...at));
               if (!block) continue;
               const shapes = block.shapes ?? [];
@@ -298,6 +297,7 @@ export class TerrainService {
         revision: revision + 1,
         origin,
         quads,
+        meshFormat: 'quad-fluid-corners-v2',
         voxels: Array.from(data),
         palette: materials.map(
           ({ state, name, color, opaque, properties, shapes, modelFaces }) => ({
@@ -329,10 +329,17 @@ export class TerrainService {
   }
   async stream(
     player,
-    { known = {}, epoch, format = 'state-u32-xzy-v1' } = {},
+    {
+      known = {},
+      epoch,
+      format = 'state-u32-xzy-v1',
+      meshFormat = 'quad-v1',
+    } = {},
   ) {
     if (!['state-u32-xzy-v1', 'state-adaptive-xzy-v2'].includes(format))
       throw new BridgeError('Unsupported terrain format', 426);
+    if (!['quad-v1', 'quad-fluid-corners-v2'].includes(meshFormat))
+      throw new BridgeError('Unsupported terrain geometry format', 426);
     if (!player.bot.entity || player.status !== 'ready')
       throw new BridgeError('Player is not ready', 409);
     if (
@@ -379,6 +386,12 @@ export class TerrainService {
         }
         partition = compact;
       }
+      if (partition && meshFormat === 'quad-v1')
+        partition = {
+          ...partition,
+          meshFormat: undefined,
+          quads: partition.quads.map((q) => (q[9] ? q.slice(0, 8) : q)),
+        };
       if (partition) {
         const size = Buffer.byteLength(JSON.stringify(partition));
         if (partitions.length && bytes + size > 768 * 1024) break;

@@ -1,5 +1,67 @@
 # Phase 2 bug-fix validation — 2026-10-08
 
+## October 10 continuation
+
+Beta 8 adds category browsing with a five-row creative grid, actual hotbar writes,
+scroll offsets and stale catalog-response checks. Category membership/order is
+approximate for the pinned registry; search retains every registry item. The
+reference's modded/older pagination and exact vanilla creative organization are
+not reproduced. Compiler-generated private GUI images replace 3D icon templates.
+An isolated Studio test loaded all 64 catalog icons with zero mesh icons and zero
+remaining loading placeholders. Text remains for unsupported special models.
+Slot/tab bevels and a carried-preview cleanup are included.
+
+Held items use compiled first-person translation/rotation/scale and extruded
+opaque sprite edges. A Studio axe probe was visually compared with the supplied
+reference; the generic flat-card angle/scale is removed. Specialized bow charging,
+maps, shields, offhand and equip transitions remain incomplete. Item templates
+are capped at 32 for world/held presentation, replacing the earlier 128 GUI cap.
+
+Terrain now reuses one serial growth buffer and shares exact-coordinate vertices,
+UVs and colours within each frozen batch. GUI icons no longer consume mesh budget.
+In the user's running scene after this change: 243 cached partitions, 314 MeshParts,
+53,848 resident triangles, zero degraded partitions, three item templates and an
+empty queue. The rolling 2,400-frame sample measured 5.52 ms p95, 6.11 ms p99 and
+240.02 average FPS. Total Studio process memory was 4,336.88 MiB; this is not
+incremental renderer memory or proof of a device/WAN budget. Allocation failures
+still retain labelled degradation and retry, rather than generating per-block Parts.
+
+The launcher interest radius is now 4 (previously 2), bounded to 2..4 partitions
+in each horizontal direction; each partition is 8 voxels wide. This is a local
+near-field improvement, not a long-distance Minecraft renderer or LOD solution.
+The existing staged build acknowledgements and canonical voxel cache remain.
+
+Full-opacity placement previews add a separately owned collision/targeting overlay
+for verified cubes. Server rejection, expiry and matching rendered revisions
+retire it. Placement confirmation is serial; mature Mineflayer placement sends
+the validated surface hit without fighting the movement look stream. Unit tests
+verify ordering, ownership, bounds and cleanup. Full native jump-build latency
+and orientation prediction still need real multiplayer/WAN comparisons.
+
+A five-second stationary Studio sample recorded 1,200 camera frames with identical
+first/last coordinates and zero backward/moving frames. This verifies the local
+grounded idle correction case, not all collision or correction conditions.
+
+Fluid corner heights now follow the pinned Java renderer's source-weighted height
+calculation, with diagonal halo data and seam invalidation. Minecraft still owns
+fluid spread. Fluid animation, all waterlogged models and every fluid/solid edge
+case remain incomplete. Plant model preparation includes azalea/dripleaf/carpet
+geometry; an isolated six-plant fixture produced 60 quads with no missing textures.
+The final fixture reused 126 mesh vertices for those faces instead of 240
+unshared face vertices. This is a geometry count, not a device memory benchmark.
+Fish, arrow and zombie-villager rigs have explicit geometry/UVs. Fish patterns/dyes
+and zombie-villager profession/biome variants remain incomplete.
+
+Sun/moon black pixels receive private transparency conversion; clouds use cutouts,
+and roof/water/dimension checks suppress celestial overlays. Authoritative eye
+skylight distinguishes a shaded outdoor canopy from an unlit cave when selecting
+fog/sky presentation. Ambient face illumination is still approximate.
+
+The optional audio-bank compiler/runtime and measured limitations are documented
+in [the audio guide](phase4-audio-banks.md). No Minecraft recordings are uploaded
+or redistributed. These local checks do not establish production readiness,
+complete model parity, memory stability under sustained travel or game completion.
+
 This is a local Studio development release. Minecraft remains authoritative.
 It does not establish complete Java parity, published crossplay or an end-game
 playthrough. Original game assets and recordings are excluded from releases.

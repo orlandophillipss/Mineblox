@@ -117,7 +117,8 @@ export function createGateway({
             if (
               !request ||
               Object.keys(request).some(
-                (k) => !['id', 'known', 'epoch', 'format'].includes(k),
+                (k) =>
+                  !['id', 'known', 'epoch', 'format', 'meshFormat'].includes(k),
               )
             )
               throw new BridgeError('Invalid terrain player');

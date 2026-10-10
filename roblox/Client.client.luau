@@ -33,6 +33,8 @@ camera.CameraType = Enum.CameraType.Scriptable camera.FieldOfView = 70
 local yaw, pitch, sequence, slot = 0, 0, 0, 1
 interface=require(modules.Interface).new(hud.gui,send)
 interface.onLocalCommand=function(command)
+	local category,volume=string.match(command,"^/volume%s+(%w+)%s+(%d+)$")
+	if category then if tonumber(volume)<=100 and sounds:setVolume(category,tonumber(volume)/100) then interface:message(category.." volume: "..volume.."%") else interface:message("Usage: /volume blocks|players|ambient|weather|hostile|friendly|music|records|voice 0..100") end return true end
 	local kind,value=string.match(command,"^/(%w+)%s+(%w+)$")
 	if kind=="sound" and (value=="on" or value=="off") then sounds:setEnabled(value=="on") interface:message("Sounds "..value) return true end
 	if kind=="music" and (value=="on" or value=="off") then if sounds:setMusic(value=="on") then interface:message("Music "..value) else interface:message("No permitted music IDs configured in .local/audio.json") end return true end
@@ -46,6 +48,9 @@ local worlds = {}
 local entities = {}
 local selected
 local selectedEntity
+local viewmodel,viewmodelName,viewmodelGeneration
+local HeldItemPose=require(modules.HeldItemPose)
+local swingAt=-math.huge
 local breaking=false
 local breakingTarget
 local breakingSeq
@@ -105,7 +110,7 @@ net.State.OnClientEvent:Connect(function(state)
 	if epoch ~= state.worldEpoch or sessionId ~= state.id then
 		placement:clear()
 		breaking=false breakingTarget=nil breakingSeq=nil miningHeld=false placingHeld=false usingItem=false completedTarget=nil
-		if sessionId~=state.id then actionSeq=0 interface.seen=0 interface.actionSeen={} player:SetAttribute("DigEventSeq",0) end
+		if sessionId~=state.id then actionSeq=0 interface.seen=0 interface.actionSeen={} player:SetAttribute("DigEventSeq",0) player:SetAttribute("HurtEventSeq",0) end
 		worlds = {} sessionId = state.id
 		displayed = nil epoch = state.worldEpoch renderer:clear()
 		worldData:clear() prediction:reset(state) displayOffset=Vector3.zero
@@ -139,10 +144,14 @@ net.State.OnClientEvent:Connect(function(state)
 		if not entry then entry = { model = entityModel(entity),samples={} } entities[entity.id] = entry end
 		local itemName=entity.item and entity.item.name
 		if not itemName and not entry.model:GetAttribute("TexturedMob") then
-			local ready=EntityVisual.create(entity) if ready then entry.model:Destroy() ready:SetAttribute("TexturedMob",true) ready.Parent=entityFolder entry.model=ready entry.rig=nil end
+			local ready=EntityVisual.create(entity) if ready then entry.model:Destroy() entry.equipment=nil ready:SetAttribute("TexturedMob",true) ready.Parent=entityFolder entry.model=ready entry.rig=nil end
 		end
-		if entry.itemName~=itemName or itemName and #entry.model:GetChildren()==0 and ItemVisual.cache[itemName] then entry.model:Destroy() entry.model=entityModel(entity) entry.itemName=itemName end
+		if entry.itemName~=itemName or itemName and #entry.model:GetChildren()==0 and ItemVisual.cache[itemName] then entry.model:Destroy() entry.equipment=nil entry.model=entityModel(entity) entry.itemName=itemName end
 		entry.isItem=itemName~=nil
+		entry.projectile=entity.name=="arrow" or entity.name=="spectral_arrow"
+		local equipment=entity.heldItem and entity.heldItem.name
+		if entry.equipmentName~=equipment then if entry.equipment then entry.equipment:Destroy() end entry.equipment=nil entry.equipmentName=equipment end
+		if equipment and not entry.equipment then entry.equipment=ItemVisual.world(equipment) if entry.equipment then entry.equipment:ScaleTo(2) entry.equipment.Parent=entry.model end end
 		entry.pitch=entity.pitch or 0
 		entry.target = CFrame.new(Vector3.new(entity.position.x, entity.position.y, entity.position.z) * 4) * CFrame.Angles(0, entity.yaw, 0)
 		table.insert(entry.samples,{time=os.clock(),position=entity.position,velocity=entity.velocity,yaw=entity.yaw}) if #entry.samples>8 then table.remove(entry.samples,1) end
@@ -177,6 +186,7 @@ net.Status.OnClientEvent:Connect(function(value)
 end)
 local function mine()
 	if os.clock()-lastDig<.25 or breaking then return end
+	swingAt=os.clock()
 	if selectedEntity then lastDig=os.clock() send("attack",{entity=selectedEntity})
 	elseif selected and table.concat(selected.target,",")~=completedTarget then
 		lastDig=os.clock() breaking=true breakingTarget=table.concat(selected.target,",") crackStarted=os.clock() crackDuration=1500 breakingSeq=send("dig",{target=selected.target,hit=selected.hit})
@@ -293,6 +303,15 @@ RunService:BindToRenderStep("MinecraftCamera", Enum.RenderPriority.Camera.Value 
 	if correction then player:SetAttribute("MinecraftCorrection", correction.revision) end
 	camera.FieldOfView+=( (sprinting and 80 or 70)-camera.FieldOfView)*math.min(1,dt*10)
 	camera.CFrame = CFrame.new((displayed + Vector3.new(0, bit32.band(controls,64)~=0 and 1.27 or 1.62, 0)) * 4) * CFrame.Angles(0, yaw, 0) * CFrame.Angles(pitch, 0, 0)
+	local held=snapshot.hotbar and snapshot.hotbar[slot] local heldName=type(held)=="table" and held.name
+	if heldName~=viewmodelName or viewmodelGeneration~=ItemVisual.generation then if viewmodel then viewmodel:Destroy() end viewmodel=nil viewmodelName=heldName viewmodelGeneration=ItemVisual.generation end
+	if heldName and not viewmodel then viewmodel=ItemVisual.world(heldName) if viewmodel then viewmodel.Name="MinecraftHeldItem" viewmodel:ScaleTo(HeldItemPose.get(ItemVisual.definition(heldName),0).scale) for _,p in ipairs(viewmodel:GetDescendants()) do if p:IsA("BasePart") then p.CanQuery=false end end end end
+	if viewmodel then
+		viewmodel.Parent=lock and (snapshot.health or 0)>0 and camera or nil
+		local pose=HeldItemPose.get(ItemVisual.definition(heldName),(os.clock()-swingAt)/.3)
+		local a,r,t=pose.attack,pose.rotation,pose.translation
+		viewmodel:PivotTo(camera.CFrame*CFrame.new(table.unpack(pose.position))*CFrame.Angles(0,math.rad(a[2]),0)*CFrame.Angles(0,0,math.rad(a[3]))*CFrame.Angles(math.rad(a[1]),0,0)*CFrame.new(t[1]/4,t[2]/4,t[3]/4)*CFrame.Angles(math.rad(r[1]),math.rad(r[2]),math.rad(r[3])))
+	end
 	sky:tick(camera,worldData)
 	if inputStarted and (displayed-inputOrigin).Magnitude>.01 then
 		player:SetAttribute("FirstCameraResponseMs",(os.clock()-inputStarted)*1000)
@@ -320,7 +339,8 @@ RunService:BindToRenderStep("MinecraftCamera", Enum.RenderPriority.Camera.Value 
 			entry.model.Parent=show and entityFolder or nil
 			if show then
 				visibleEntities+=1
-				entry.model:PivotTo(CFrame.new(center+Vector3.new(0,entry.isItem and .6+math.sin(os.clock()*2)*.15 or 0,0))*CFrame.Angles(0,entry.isItem and os.clock() or sample.yaw,0))
+				entry.model:PivotTo(CFrame.new(center+Vector3.new(0,entry.isItem and .6+math.sin(os.clock()*2)*.15 or 0,0))*CFrame.Angles(0,entry.isItem and os.clock() or sample.yaw,0)*(entry.projectile and CFrame.Angles(-(entry.pitch or 0),math.pi/2,0) or CFrame.new()))
+				if entry.equipment then entry.equipment.Parent=entry.model entry.equipment:PivotTo(entry.model:GetPivot()*CFrame.new(-1.4,4.2,-1.2)*CFrame.Angles(0,math.pi/2,0)) end
 				if not entry.isItem then EntityVisual.animate(entry,sample,dt) end
 			end
 		end
@@ -339,6 +359,8 @@ if RunService:IsStudio() then
 		if kind=="action" then local fields=table.clone(data) local action=fields.kind fields.kind=nil send(action,fields) return true end
 		if kind=="target" then return selected end
 		if kind=="inventory" then interface:toggle() return true end
+		if kind=="creativeTab" then interface:selectTab(data) return true end
+		if kind=="ui" then return {open=interface.open,creative=interface.creative.Visible,tab=interface.creativeTab,category=interface.creativeTitle.Text,crafting=interface.craftingTitle.Visible,preview=interface.preview.Visible,slots=#(interface.catalogSlots or {}),total=interface.catalogTotal,offset=interface.catalogOffset,pick=interface.creativePick,held=viewmodelName} end
 		if kind=="respawn" then interface:requestRespawn() return true end
 		if kind=="counts" then local total,parts=0,0 for _,e in pairs(renderer.parts) do total+=1 parts+=#e.group:GetChildren() end return {cached=total,meshParts=parts,visible=renderer.visible,triangles=renderer.triangles} end
 		if kind=="benchmark" then
@@ -346,7 +368,7 @@ if RunService:IsStudio() then
 			for _,e in pairs(renderer.parts) do count+=1 parts+=#e.group:GetChildren() degraded+=e.degraded and 1 or 0 triangles+=e.triangles or 0 table.insert(builds,e.buildMs or 0) end
 			table.sort(builds)
 			local memory=game:GetService("Stats"):GetTotalMemoryUsageMb()
-			return {frames=metrics:report(),cached=count,meshParts=parts,degraded=degraded,residentTriangles=triangles,clientMemoryMb=memory,buildWallP95Ms=builds[math.max(1,math.ceil(#builds*.95))] or 0,queueDepth=#worlds,position=prediction.state and prediction.state.position,epoch=epoch,httpBytes=snapshot and snapshot.httpBytes,atlasCells=renderer.atlas and renderer.atlas.count,itemTemplates=ItemVisual.cacheSize,voxelFormat="state-adaptive-xzy-v2"}
+			return {frames=metrics:report(),cached=count,meshParts=parts,degraded=degraded,residentTriangles=triangles,clientMemoryMb=memory,buildWallP95Ms=builds[math.max(1,math.ceil(#builds*.95))] or 0,queueDepth=#worlds,position=prediction.state and prediction.state.position,epoch=epoch,httpBytes=snapshot and snapshot.httpBytes,atlasCells=renderer.atlas and renderer.atlas.count,itemTemplates=ItemVisual.cacheSize,voxelFormat="state-adaptive-xzy-v2",audio={voices=#sounds.banks.pool,played=sounds.banks.played,fallbacks=sounds.banks.dropped}}
 		end
 	end
 end

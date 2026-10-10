@@ -3,6 +3,7 @@ import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 import { readFile, readdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { selectStudio } from './studio-selection.js';
+import { writeAudioBankConfig } from './audio-bank-config.js';
 const client = new Client({ name: 'mineblox-sync', version: '0.2.0' });
 await client.connect(
   new StdioClientTransport({
@@ -35,6 +36,7 @@ try {
       'Could not stop the selected Studio playtest for script updates',
     );
   await writeFile('.local/studio.json', JSON.stringify({ id }));
+  await writeAudioBankConfig('.local/roblox');
   const scripts = [
     [
       'ServerScriptService.DevelopmentConfig',
@@ -50,7 +52,28 @@ try {
     ['ReplicatedStorage.MinebloxClient.Metrics', 'roblox/Metrics.luau'],
     ['ReplicatedStorage.MinebloxClient.Images', 'roblox/Images.luau'],
     ['ReplicatedStorage.MinebloxClient.ItemVisual', 'roblox/ItemVisual.luau'],
+    ['ReplicatedStorage.MinebloxClient.MeshBuilder', 'roblox/MeshBuilder.luau'],
+    [
+      'ReplicatedStorage.MinebloxClient.HeldItemPose',
+      'roblox/HeldItemPose.luau',
+    ],
     ['ReplicatedStorage.MinebloxClient.ViewportFit', 'roblox/ViewportFit.luau'],
+    [
+      'ReplicatedStorage.MinebloxClient.CreativeLayout',
+      'roblox/CreativeLayout.luau',
+    ],
+    [
+      'ReplicatedStorage.MinebloxClient.AudioBankPlayer',
+      'roblox/AudioBankPlayer.luau',
+    ],
+    [
+      'ReplicatedStorage.MinebloxClient.AudioBankRules',
+      'roblox/AudioBankRules.luau',
+    ],
+    [
+      'ReplicatedStorage.MinebloxClient.AudioBankConfig',
+      '.local/roblox/AudioBankConfig.luau',
+    ],
     [
       'ReplicatedStorage.MinebloxClient.EntityDefinitions',
       'roblox/EntityDefinitions.luau',
@@ -69,6 +92,10 @@ try {
     ['ReplicatedStorage.MinebloxClient.VoxelData', 'roblox/VoxelData.luau'],
     ['ReplicatedStorage.MinebloxClient.Prediction', 'roblox/Prediction.luau'],
     ['ReplicatedStorage.MinebloxClient.Placement', 'roblox/Placement.luau'],
+    [
+      'ReplicatedStorage.MinebloxClient.PlacementRules',
+      'roblox/PlacementRules.luau',
+    ],
     ['ReplicatedStorage.MinebloxClient.Inventory', 'roblox/Inventory.luau'],
     ['ReplicatedStorage.MinebloxClient.Interface', 'roblox/Interface.luau'],
     ['ReplicatedStorage.MinebloxClient.Visibility', 'roblox/Visibility.luau'],
@@ -94,6 +121,21 @@ try {
       scripts.unshift([
         `ReplicatedStorage.MinebloxClient.${file.replace('.luau', '')}`,
         `.local/roblox/${file}`,
+      ]);
+  const folder = await client.callTool({
+    name: 'execute_luau',
+    arguments: {
+      studio_id: id,
+      datamodel_type: 'Edit',
+      code: 'local p=game.ReplicatedStorage.MinebloxClient if not p:FindFirstChild("AudioBankData") then local f=Instance.new("Folder") f.Name="AudioBankData" f.Parent=p end return "Audio data folder ready"',
+    },
+  });
+  if (folder.isError) throw new Error('Could not prepare audio data folder');
+  for (const file of await readdir('.local/roblox/AudioBankData'))
+    if (/^Pack\d+\.luau$/.test(file))
+      scripts.unshift([
+        `ReplicatedStorage.MinebloxClient.AudioBankData.${file.replace('.luau', '')}`,
+        `.local/roblox/AudioBankData/${file}`,
       ]);
   for (const [target, filename] of scripts) {
     const source = await readFile(filename, 'utf8');

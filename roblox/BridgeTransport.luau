@@ -122,7 +122,7 @@ function Transport:terrain()
 		local userId = users[self.cursor]
 		self.cursor += 1
 		local s = self.sessions[userId]
-		table.insert(requests, { id = s.id, known = next(s.known) and s.known or nil, epoch = s.epoch, format="state-adaptive-xzy-v2" })
+		table.insert(requests, { id = s.id, known = next(s.known) and s.known or nil, epoch = s.epoch, format="state-adaptive-xzy-v2",meshFormat="quad-fluid-corners-v2" })
 		selected[s.id] = { userId = userId, session = s }
 	end
 	if #requests == 0 then return {} end

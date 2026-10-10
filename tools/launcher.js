@@ -258,7 +258,7 @@ try {
   gateway = createGateway({
     token,
     models,
-    terrainRadius: 3,
+    terrainRadius: Number(process.env.MINEBLOX_TERRAIN_RADIUS ?? 4),
     minecraft: { host: '127.0.0.1', port: 25565, version: '1.21.4' },
     createBot: mineflayer.createBot,
     requireOwner:

@@ -100,6 +100,12 @@ function Prediction:reconcile(snapshot)
 		base.position.y=self.state.position.y base.velocity.y=self.state.velocity.y base.onGround=self.state.onGround base.jumpTicks=self.state.jumpTicks
 		if self.state.onGround and snapshot.predicted.onGround then self.verticalFlight=false end
 	elseif self.error>=2 then self.verticalFlight=false end
+	-- Subpixel rest noise must not continually drag a grounded idle camera.
+	-- Real displacement, liquids and forced corrections still reconcile.
+	local last=self.history[#self.history]
+	if last and bit32.band(last.frame.controls,15)==0 and self.state.onGround and base.onGround and not snapshot.inWater and not snapshot.inLava and math.abs(base.velocity.x)<.003 and math.abs(base.velocity.z)<.003 and math.sqrt(dx*dx+dz*dz)<.025 then
+		base.position.x=self.state.position.x base.position.z=self.state.position.z
+	end
 	self.state=base self.history=remaining
 	return self.error>2
 end

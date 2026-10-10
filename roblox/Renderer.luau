@@ -3,6 +3,7 @@ local Images = require(script.Parent.Images)
 local Visibility=require(script.Parent.Visibility)
 local Atlas=require(script.Parent.Atlas)
 local FaceTiles=require(script.Parent.FaceTiles)
+local MeshBuilder=require(script.Parent.MeshBuilder)
 local Renderer = {}
 Renderer.__index = Renderer
 local SCALE = 4
@@ -11,6 +12,7 @@ local function destroy(entry)
 	for _, mesh in ipairs(entry.meshes) do mesh:Destroy() end
 end
 function Renderer.new()
+	MeshBuilder.reserve()
 	local root = Instance.new("Folder") root.Name = "MinecraftTerrain" root.Parent = workspace
 	return setmetatable({ root = root, parts = {}, epoch = nil, generation=0, meshAvailable = true, count = 0, triangles=0,visible=0,atlas=Atlas.new(),catalog=Images.assets }, Renderer)
 end
@@ -24,7 +26,7 @@ function Renderer:clear()
 	end
 end
 local function vertices(q,material)
-	if q[9] and material.modelFaces then
+	if q[9] and q[9]>0 and material.modelFaces then
 		local face=material.modelFaces[q[9]] local points,uv={},{}
 		for i,p in ipairs(face.points) do points[i]=(Vector3.new(table.unpack(p))+Vector3.new(q[3],q[4],q[5]))*SCALE uv[i]=Vector2.new(table.unpack(face.uv[i])) end
 		return points,uv
@@ -35,6 +37,10 @@ local function vertices(q,material)
 	local out, uv = {}, {}
 	for _, offset in ipairs({ {0, 0}, {q[6], 0}, {q[6], q[7]}, {0, q[7]} }) do
 		local p = table.clone(base) p[u] += offset[1] p[v] += offset[2]
+		if q[10] and (axis==2 or p[2]>q[10][2]+.001) then
+			local f=q[10] local east=p[1]>f[1]+.5 local south=p[3]>f[3]+.5
+			p[2]=f[2]+f[east and (south and 6 or 7) or (south and 5 or 4)]
+		end
 		table.insert(out, Vector3.new(p[1], p[2], p[3]) * SCALE)
 		-- Block-scale UVs repeat at each voxel on a greedy merged face.
 		if axis == 1 then table.insert(uv, Vector2.new(q[2] < 0 and p[3] or -p[3], -p[2]))
@@ -49,7 +55,7 @@ local function faceColor(q,material,textured)
 	if textured and (string.find(material.name,"leaves") or material.name=="fern" or material.name=="short_grass" or material.name=="grass_block" and q[1]==1 and q[2]==1) then color=Color3.fromRGB(145,189,89) end
 	if textured and material.name=="water" then color=Color3.fromRGB(63,118,228) end
 	local axis,sign=q[1],q[2]
-	if q[9] then
+	if q[9] and q[9]>0 then
 		local p=material.modelFaces[q[9]].points
 		local normal=(Vector3.new(table.unpack(p[2]))-Vector3.new(table.unpack(p[1]))):Cross(Vector3.new(table.unpack(p[3]))-Vector3.new(table.unpack(p[1])))
 		if normal.Magnitude>0 then normal=normal.Unit local absolute=Vector3.new(math.abs(normal.X),math.abs(normal.Y),math.abs(normal.Z)) axis=absolute.Y>absolute.X and absolute.Y>absolute.Z and 1 or absolute.X>absolute.Z and 0 or 2 sign=axis==1 and normal.Y or axis==0 and normal.X or normal.Z end
@@ -58,6 +64,7 @@ local function faceColor(q,material,textured)
 	return Color3.new(color.R*shade,color.G*shade,color.B*shade)
 end
 function Renderer:partition(partition)
+	assert(not partition.meshFormat or partition.meshFormat=="quad-fluid-corners-v2","Unsupported terrain geometry format")
 	local generation=self.generation
 	local previous = self.parts[partition.key]
 	if previous and previous.revision >= partition.revision and (not previous.degraded or os.clock()<previous.retryAt) then return end
@@ -69,12 +76,13 @@ function Renderer:partition(partition)
 	for _, q in ipairs(partition.quads) do
 		local material = palette[q[8]]
 		local key = Images.faceKey(material.name, q[1], q[2], material.properties)
-		if q[9] and material.modelFaces then key=material.modelFaces[q[9]].texture end
+		local model=q[9] and q[9]>0
+		if model and material.modelFaces then key=material.modelFaces[q[9]].texture end
 		local cell=self.atlas:get(key,faceColor(q,material,true)) local image=cell and cell.image
 		local atlasKey=key
-		key = (not image and "substitute" or ((material.name=="water" and "water" or cell.alpha and "cutout" or "opaque")..":"..cell.page))..(q[9] and ":model" or ":solid")
+		key = (not image and "substitute" or ((material.name=="water" and "water" or cell.alpha and "cutout" or "opaque")..":"..cell.page))..(model and ":model" or ":solid")
 		if not image then missing[material.name] = true end
-		if not batches[key] then batches[key] = { image = image, key=key, alpha=cell and cell.alpha, doubleSided=q[9]~=nil or material.name=="water", tint=Color3.new(1,1,1), water=material.name=="water", quads = {} } end
+		if not batches[key] then batches[key] = { image = image, key=key, alpha=cell and cell.alpha, doubleSided=model or material.name=="water", tint=Color3.new(1,1,1), water=material.name=="water", quads = {} } end
 		FaceTiles.each(q,function(tile) table.insert(batches[key].quads,{quad=tile,cell=cell,key=atlasKey}) end)
 	end
 	local missingNames = {} for name in pairs(missing) do table.insert(missingNames, name) end table.sort(missingNames)
@@ -88,8 +96,8 @@ function Renderer:partition(partition)
 			for _, batch in pairs(batches) do
 				if os.clock()-started>.004 then task.wait() started=os.clock() end
 				if generation~=self.generation then error("Terrain build superseded",0) end
-				local mesh = AssetService:CreateEditableMesh() assert(mesh, "EditableMesh allocation denied")
-				table.insert(meshes, mesh)
+				local mesh = MeshBuilder.acquire() assert(mesh, "EditableMesh allocation denied")
+				local vertexCache,uvCache,colorCache={},{},{}
 				local low, high = Vector3.new(math.huge, math.huge, math.huge), Vector3.new(-math.huge, -math.huge, -math.huge)
 				for _, tile in ipairs(batch.quads) do
 					if os.clock()-started>.003 then task.wait() started=os.clock() end
@@ -98,18 +106,19 @@ function Renderer:partition(partition)
 					local points, uv = vertices(q,palette[q[8]])
 					if tile.cell then
 						local minU,minV=math.huge,math.huge for _,p in ipairs(uv) do minU=math.min(minU,p.X) minV=math.min(minV,p.Y) end
-						for i,p in ipairs(uv) do uv[i]=self.atlas:uv(tile.cell,p,minU,minV,q[9]~=nil) end
+						for i,p in ipairs(uv) do uv[i]=self.atlas:uv(tile.cell,p,minU,minV,q[9]~=nil and q[9]>0) end
 					end
 					triangles+=2
 					local ids, uvIds = {}, {}
 					for i, p in ipairs(points) do
 						low = Vector3.new(math.min(low.X, p.X), math.min(low.Y, p.Y), math.min(low.Z, p.Z))
 						high = Vector3.new(math.max(high.X, p.X), math.max(high.Y, p.Y), math.max(high.Z, p.Z))
-						table.insert(ids, mesh:AddVertex(p)) table.insert(uvIds, mesh:AddUV(uv[i]))
+						local key=string.format("%.17g,%.17g,%.17g",p.X,p.Y,p.Z) local id=vertexCache[key] if not id then id=mesh:AddVertex(p) vertexCache[key]=id end table.insert(ids,id)
+						local uvKey=string.format("%.17g,%.17g",uv[i].X,uv[i].Y) local uvId=uvCache[uvKey] if not uvId then uvId=mesh:AddUV(uv[i]) uvCache[uvKey]=uvId end table.insert(uvIds,uvId)
 					end
 					local material = palette[q[8]]
 					local color=batch.alpha and Color3.new(1,1,1) or faceColor(q,material,batch.image~=nil)
-					local colorId = mesh:AddColor(color, 1)
+					local colorKey=tostring(color) local colorId=colorCache[colorKey] if not colorId then colorId=mesh:AddColor(color,1) colorCache[colorKey]=colorId end
 					for _, triangle in ipairs({ {1, 2, 3}, {1, 3, 4} }) do
 						local a, b, c = triangle[1], triangle[2], triangle[3]
 						local face = mesh:AddTriangle(ids[a], ids[b], ids[c])
@@ -124,10 +133,11 @@ function Renderer:partition(partition)
 				-- Resizable meshes reserve growth capacity. Freeze each completed
 				-- batch so chunk streaming can fit the device's mesh memory budget.
 				local fixed = AssetService:CreateEditableMeshAsync(Content.fromObject(mesh), { FixedSize = true })
+				MeshBuilder.release()
 				assert(fixed, "Fixed mesh allocation denied")
-				mesh:Destroy()
-				mesh = fixed meshes[#meshes] = fixed
+				mesh = fixed table.insert(meshes,fixed)
 				local part = AssetService:CreateMeshPartAsync(Content.fromObject(mesh))
+				part:SetAttribute("VertexCount",#mesh:GetVertices()) part:SetAttribute("UVCount",#mesh:GetUVs())
 				part.Parent=group -- Own the part before any subsequent yielding API.
 				part.Anchored = true part.CanCollide = false part.CanTouch=false part.CanQuery=false part.CastShadow=false part.DoubleSided = batch.doubleSided
 				part.Material = Enum.Material.SmoothPlastic part.Color = Color3.new(1, 1, 1)
@@ -144,6 +154,7 @@ function Renderer:partition(partition)
 				part.Parent = group
 			end
 		end)
+		MeshBuilder.release()
 		if generation~=self.generation then
 			group:Destroy() for _,mesh in ipairs(meshes) do mesh:Destroy() end return false
 		end
@@ -178,7 +189,7 @@ end
 function Renderer:visibility(camera)
 	local visible,triangles=0,0
 	for _,entry in pairs(self.parts) do
-		local show=self.disableCulling or Visibility.visible(camera,entry.center,math.sqrt(3)*16,192)
+		local show=self.disableCulling or Visibility.visible(camera,entry.center,math.sqrt(3)*16,256)
 		entry.group.Parent=show and self.root or nil
 		if show then visible+=1 triangles+=entry.triangles end
 	end
